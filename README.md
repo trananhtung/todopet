@@ -58,6 +58,15 @@ open /Applications/TodoPet.app
 
 `UNIVERSAL=1 scripts/build.sh` builds for both Apple silicon and Intel.
 
+**Recommended if you rebuild often:** give your builds a stable signature, so macOS remembers the Keychain, Calendar and browser permissions instead of asking again after every update:
+
+```bash
+scripts/setup-signing.sh   # creates a "TodoPet Local Signing" certificate in its own keychain
+scripts/trust-signing.sh   # marks it trusted for code signing, for your user only (asks for your password)
+```
+
+After that `scripts/build.sh` signs with it automatically. To undo, delete `~/Library/Application Support/TodoPet-Signing` and the certificate in Keychain Access.
+
 Want to look around first? Run `open build/TodoPet.app --args --demo` to use sample tasks, no account needed.
 
 ## Connect Todoist
@@ -74,7 +83,7 @@ The token is stored in your macOS **Keychain** and is only ever sent to `api.tod
 | Calendar | Meetings, free time, time-block suggestions | The board offers an **Allow** button; everything else works |
 | "TodoPet wants to control Safari / Chrome…" (once per browser) | Reading the active tab's address for distracting sites | Website detection is off for that browser; app detection still works |
 
-Because the app is ad-hoc signed, macOS may ask again after you rebuild it.
+With an ad-hoc signature macOS asks again after every rebuild; with the local signing certificate (see Install) it asks only once.
 
 ### Splitting tasks with Claude (optional)
 
