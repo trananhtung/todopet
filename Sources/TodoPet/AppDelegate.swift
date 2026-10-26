@@ -48,6 +48,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         board = BoardController(brain: brain, prefs: prefs)
 
         brain.openBoard = { [weak self] focusAdd in self?.openBoard(focusAdd: focusAdd) }
+        brain.openBreakdown = { [weak self] task in
+            self?.board.state.breakdown = task
+            self?.openBoard(focusAdd: false)
+        }
         brain.openSettings = { [weak self] in self?.openSettings() }
 
         pet.hit.onClick = { [weak self] in self?.petClicked() }
@@ -161,7 +165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let left = max(0, Int(f.end.timeIntervalSinceNow))
             button.title = "\(f.isBreak ? "☕" : "🍅") \(left / 60):\(String(format: "%02d", left % 60))"
         } else if brain.hasToken {
-            button.title = "\(brain.mood.emoji) \(brain.day.completed.count)/\(max(prefs.dailyTarget, brain.day.planned))"
+            button.title = "\(brain.mood.emoji) \(brain.day.completed.count)/\(max(brain.target, brain.day.planned))"
         } else {
             button.title = "🐾"
         }

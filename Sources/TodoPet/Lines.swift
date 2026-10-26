@@ -153,6 +153,52 @@ enum Lines {
         L("Mình không kết nối được Todoist 😵 \(e)", "I can't reach Todoist 😵 \(e)")
     }
 
+    // MARK: Calendar
+
+    static func meetingSoon(_ e: CalEvent, minutes: Int) -> String {
+        L("📅 \(minutes) phút nữa họp: “\(TextClean.short(e.title))” (\(DayMath.timeString(e.start)))",
+          "📅 Meeting in \(minutes) min: “\(TextClean.short(e.title))” (\(DayMath.timeString(e.start)))")
+    }
+
+    static func calendarDay(meetings: Int, busyMinutes: Double, freeMinutes: Double, target: Int, reduced: Bool) -> String {
+        let busy = CalendarMath.hoursText(busyMinutes), free = CalendarMath.hoursText(freeMinutes)
+        let base = L("📅 Hôm nay \(meetings) cuộc họp (\(busy)), còn \(free) trống",
+                     "📅 \(meetings) meeting(s) today (\(busy)), \(free) free")
+        return base + (reduced ? L(" → \(target) việc là vừa sức.", " → \(target) task(s) is realistic.") : ".")
+    }
+
+    static func timeBlock(_ s: SlotSuggestion) -> String {
+        L("Gắn giờ cho dễ bắt đầu: \(DayMath.timeString(s.start))–\(DayMath.timeString(s.end)) làm \(q(s.task)) nhé?",
+          "A set time makes it easier to start: \(DayMath.timeString(s.start))–\(DayMath.timeString(s.end)) for \(q(s.task))?")
+    }
+
+    static func timeSet(_ t: TodoTask, at: Date) -> String {
+        L("Đã hẹn \(q(t)) lúc \(DayMath.timeString(at)). Mình sẽ nhắc đúng giờ ⏰", "Scheduled \(q(t)) at \(DayMath.timeString(at)). I'll remind you ⏰")
+    }
+
+    // MARK: Postponed tasks
+
+    static func stuck(_ s: StuckTask, mood: Mood) -> String {
+        if mood == .angry {
+            return L("\(q(s.task)) nằm đó \(s.days) ngày rồi đấy!! 💢 Chia nhỏ hoặc bỏ đi.",
+                     "\(q(s.task)) has been sitting there for \(s.days) days!! 💢 Split it or drop it.")
+        }
+        return pick([("\(q(s.task)) bị dời \(s.days) ngày rồi 😑 Chắc nó to quá? Chia thành bước nhỏ cho dễ bắt đầu nhé.",
+                      "\(q(s.task)) has been pushed for \(s.days) days 😑 Too big? Let's split it into small steps."),
+                     ("Mình thấy \(q(s.task)) cứ bị dời mãi (\(s.days) ngày). Bước nhỏ nhất để bắt đầu là gì?",
+                      "\(q(s.task)) keeps getting postponed (\(s.days) days). What's the tiniest first step?")])
+    }
+
+    static func splitDone(count: Int, first: String) -> String {
+        L("Đã chia thành \(count) bước ✂️ Bắt đầu với “\(TextClean.short(first))” nhé — chỉ 15–30 phút thôi!",
+          "Split into \(count) steps ✂️ Start with “\(TextClean.short(first))” — just 15–30 minutes!")
+    }
+
+    static func unplanned(_ t: TodoTask) -> String {
+        L("Đã bỏ \(q(t)) khỏi kế hoạch (vẫn còn trong Todoist, không hạn). Nhẹ đầu hơn chưa? 🙂",
+          "Took \(q(t)) off the plan (still in Todoist, no date). Feels lighter? 🙂")
+    }
+
     /// Short, evidence-based productivity tips the pet drops occasionally.
     static func tip() -> String {
         pick([

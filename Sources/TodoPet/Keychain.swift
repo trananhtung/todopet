@@ -1,19 +1,23 @@
 import Foundation
 import Security
 
-/// Stores the Todoist API token in the login Keychain (never in plain files).
+/// Stores secrets (Todoist token, Anthropic API key) in the login Keychain, never in plain files.
 enum Keychain {
-    private static let service = "com.todopet.mochi"
-    private static let account = "todoist-api-token"
-
-    private static var baseQuery: [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword,
-         kSecAttrService as String: service,
-         kSecAttrAccount as String: account]
+    enum Item: String {
+        case todoist = "todoist-api-token"
+        case anthropic = "anthropic-api-key"
     }
 
-    static func read() -> String? {
-        var q = baseQuery
+    private static let service = "com.todopet.mochi"
+
+    private static func baseQuery(_ item: Item) -> [String: Any] {
+        [kSecClass as String: kSecClassGenericPassword,
+         kSecAttrService as String: service,
+         kSecAttrAccount as String: item.rawValue]
+    }
+
+    static func read(_ item: Item = .todoist) -> String? {
+        var q = baseQuery(item)
         q[kSecReturnData as String] = true
         q[kSecMatchLimit as String] = kSecMatchLimitOne
         var out: AnyObject?
@@ -24,15 +28,15 @@ enum Keychain {
     }
 
     @discardableResult
-    static func save(_ token: String) -> Bool {
-        delete()
-        var q = baseQuery
-        q[kSecValueData as String] = Data(token.utf8)
+    static func save(_ secret: String, _ item: Item = .todoist) -> Bool {
+        delete(item)
+        var q = baseQuery(item)
+        q[kSecValueData as String] = Data(secret.utf8)
         q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
         return SecItemAdd(q as CFDictionary, nil) == errSecSuccess
     }
 
-    static func delete() {
-        SecItemDelete(baseQuery as CFDictionary)
+    static func delete(_ item: Item = .todoist) {
+        SecItemDelete(baseQuery(item) as CFDictionary)
     }
 }

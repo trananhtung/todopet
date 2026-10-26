@@ -89,6 +89,62 @@ enum DevTools {
         i.focusing = true
         check(MoodEngine.evaluate(i).mood == .focus, "focus session")
 
+        i = MoodInputs()
+        i.planned = 3; i.remaining = 3; i.minutesSinceProgress = 300; i.inMeeting = true
+        check(MoodEngine.evaluate(i).mood == .normal, "no grumpiness during meetings")
+
+        // Browser distraction rules.
+        let rules = ["youtube.com", "facebook.com", "reddit.com/r/funny"]
+        check(BrowserWatcher.match(host: "m.youtube.com", url: "https://m.youtube.com/watch?v=1", rules: rules) == "youtube.com",
+              "site rule matches subdomains")
+        check(BrowserWatcher.match(host: "notyoutube.com", url: "https://notyoutube.com/", rules: rules) == nil,
+              "site rule ignores look-alike domains")
+        check(BrowserWatcher.match(host: "reddit.com", url: "https://www.reddit.com/r/funny/top", rules: rules) == "reddit.com/r/funny",
+              "path rule matches")
+        check(BrowserWatcher.match(host: "reddit.com", url: "https://www.reddit.com/r/swift", rules: rules) == nil,
+              "path rule only matches that path")
+        check(BrowserWatcher.host(of: "https://www.Facebook.com/home") == "facebook.com", "host normalized")
+
+        // Calendar math (now = 2026-10-25 11:00).
+        let base = DayMath.at(hour: 8, on: now)
+        let dayEnd = DayMath.at(hour: 18, on: now)
+        func meeting(_ h: Double, _ hours: Double) -> CalEvent {
+            CalEvent(id: "\(h)", title: "m", start: base.addingTimeInterval(h * 3600),
+                     end: base.addingTimeInterval((h + hours) * 3600), joinURL: nil)
+        }
+        let events = [meeting(1, 1), meeting(1.5, 1), meeting(5, 0.5)]  // 9:00–10:30 (overlapping) and 13:00–13:30
+        check(CalendarMath.busy(events, from: base, to: dayEnd).count == 2, "overlapping meetings merge")
+        check(abs(CalendarMath.freeMinutes(events, from: base, to: dayEnd) - 480) < 0.1, "free minutes")
+        check(CalendarMath.freeSlots(events, from: base, to: dayEnd).count == 3, "free slots between meetings")
+        check(CalendarMath.target(freeMinutes: 480, maxTarget: 3) == 3 && CalendarMath.target(freeMinutes: 200, maxTarget: 3) == 2
+              && CalendarMath.target(freeMinutes: 60, maxTarget: 3) == 1, "target follows free time")
+        let slotTasks = [TodoTask(id: "a", content: "A", priority: 4, due: TodoDue(date: "2026-10-25")),
+                         TodoTask(id: "b", content: "B", priority: 1, due: TodoDue(date: "2026-10-25"),
+                                  duration: TodoDuration(amount: 30, unit: "minute"))]
+        let sug = CalendarMath.suggest(tasks: slotTasks, events: events, now: base.addingTimeInterval(50 * 60), dayEnd: dayEnd)
+        check(sug.first.map { cal.component(.hour, from: $0.start) == 10 && cal.component(.minute, from: $0.start) == 30 } ?? false,
+              "first suggestion starts after the meeting")
+        check(sug.count == 2 && sug[1].end.timeIntervalSince(sug[1].start) == 1800, "task duration respected")
+        check(CalendarMath.joinURL(url: nil, texts: ["Join: https://us02web.zoom.us/j/123?pwd=x thanks"])?.host == "us02web.zoom.us",
+              "meeting link found in notes")
+
+        // Postponed tasks.
+        check(StuckTracker.days(seen: 1, dueDay: "2026-10-22", today: "2026-10-25") == 4, "overdue 3 days = 4 days on the list")
+        let tracker = StuckTracker(persist: false)
+        let s = TodoTask(id: "s", content: "S", due: TodoDue(date: "2026-10-25"))
+        for d in [-2.0, -1, 0, 0] { tracker.record([s], now: now.addingTimeInterval(d * 86_400)) }
+        check(tracker.stuck([s], minDays: 3, now: now).first?.days == 3, "tracker counts distinct days")
+        let parent = TodoTask(id: "p", content: "Big", priority: 4, due: TodoDue(date: "2026-10-25"))
+        let child = TodoTask(id: "c", content: "Small", priority: 4, due: TodoDue(date: "2026-10-25"), parentId: "p")
+        check(DaySnapshot.build(active: [parent, child], completed: [], now: now).next?.id == "c", "first step comes before the big task")
+
+        // Claude answers.
+        let answer = #"{"content":[{"type":"thinking","thinking":""},{"type":"text","text":"{\"steps\":[\"Mở file\",\" Viết dàn ý \",\"\"]}"}],"stop_reason":"end_turn"}"#
+        check((try? ClaudeClient.parseSteps(Data(answer.utf8))) == ["Mở file", "Viết dàn ý"], "Claude steps parsed")
+        var refused = false
+        do { _ = try ClaudeClient.parseSteps(Data(#"{"content":[],"stop_reason":"refusal"}"#.utf8)) } catch ClaudeError.refused { refused = true } catch {}
+        check(refused, "Claude refusal detected")
+
         // Language switch.
         let saved = currentLang
         currentLang = .en
@@ -107,17 +163,21 @@ enum DevTools {
     static func snapshot(to dir: String) {
         let url = URL(fileURLWithPath: dir)
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-        _ = Prefs.shared
-        if let l = ProcessInfo.processInfo.environment["TODOPET_LANG"].flatMap(Lang.init(rawValue:)) { currentLang = l }
+        // Default settings in a throwaway suite: snapshots never read or change your real settings.
+        let suite = "com.todopet.snapshot"
+        let defaults = UserDefaults(suiteName: suite) ?? .standard
+        defaults.removePersistentDomain(forName: suite)
+        let prefs = Prefs(defaults: defaults)
+        if let l = ProcessInfo.processInfo.environment["TODOPET_LANG"].flatMap(Lang.init(rawValue:)) { prefs.lang = l }
         savePNG(MoodSheet(), url.appendingPathComponent("moods.png"), scale: 2)
         savePNG(IconArt(), url.appendingPathComponent("icon-1024.png"), scale: 1)
 
-        let brain = Brain(prefs: Prefs.shared, demo: true)
+        let brain = Brain(prefs: prefs, demo: true)
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 900_000_000)
             for appearance in [NSAppearance.Name.aqua, .darkAqua] {
                 let name = appearance == .aqua ? "light" : "dark"
-                saveView(BoardView(brain: brain, prefs: Prefs.shared, state: BoardState())
+                saveView(BoardView(brain: brain, prefs: prefs, state: BoardState())
                     .background(Color(nsColor: .windowBackgroundColor)), appearance,
                          url.appendingPathComponent("board-\(name).png"))
                 let model = BubbleModel()
@@ -128,6 +188,23 @@ enum DevTools {
                 ])
                 saveView(BubbleView(model: model), appearance, url.appendingPathComponent("bubble-\(name).png"))
             }
+            if let stuck = brain.stuck.first {
+                let model = BubbleModel()
+                model.mood = .annoyed
+                model.bubble = Bubble(text: Lines.stuck(stuck, mood: .annoyed), actions: [
+                    BubbleAction(title: L("✂️ Chia nhỏ", "✂️ Split it"), primary: true) {},
+                    BubbleAction(title: L("Bỏ khỏi kế hoạch", "Drop from plan")) {},
+                    BubbleAction(title: L("Để sau", "Later")) {},
+                ])
+                saveView(BubbleView(model: model), .aqua, url.appendingPathComponent("bubble-stuck.png"))
+                let steps = [L("Mở hộp thư, lọc email của sếp", "Open the inbox and find the boss's email"),
+                             L("Ghi 3 ý chính cần trả lời", "Jot down the 3 points to answer"),
+                             L("Viết và gửi bản trả lời ngắn", "Write and send a short reply")]
+                saveView(BreakdownView(task: stuck.task, brain: brain, state: BoardState(), steps: steps)
+                    .frame(width: 370).background(Color(nsColor: .windowBackgroundColor)), .aqua,
+                         url.appendingPathComponent("split.png"))
+            }
+            defaults.removePersistentDomain(forName: suite)
             print("Snapshots written to \(url.path)")
             exit(0)
         }

@@ -14,6 +14,13 @@ struct TodoDeadline: Codable, Hashable {
     var date: String
 }
 
+struct TodoDuration: Codable, Hashable {
+    var amount: Int
+    var unit: String
+
+    var minutes: Int { unit == "day" ? amount * 8 * 60 : amount }
+}
+
 struct TodoTask: Codable, Identifiable, Hashable {
     var id: String
     var content: String
@@ -21,6 +28,7 @@ struct TodoTask: Codable, Identifiable, Hashable {
     var priority: Int?
     var due: TodoDue?
     var deadline: TodoDeadline?
+    var duration: TodoDuration?
     var projectId: String?
     var parentId: String?
     var labels: [String]?
@@ -116,11 +124,16 @@ enum DayMath {
     }
     static func hour(_ d: Date) -> Int { Calendar.current.component(.hour, from: d) }
 
+    /// Whole days from day key `a` to day key `b` ("yyyy-MM-dd").
+    static func daysBetween(_ a: String, _ b: String) -> Int {
+        guard let x = DateParse.parse(a), let y = DateParse.parse(b) else { return 0 }
+        return Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: x),
+                                               to: Calendar.current.startOfDay(for: y)).day ?? 0
+    }
+
     /// "yesterday" / "3 days ago" for an overdue "yyyy-MM-dd".
     static func daysAgo(_ day: String, now: Date = Date()) -> String {
-        guard let d = DateParse.parse(day) else { return day }
-        let n = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: d),
-                                                to: Calendar.current.startOfDay(for: now)).day ?? 0
+        let n = daysBetween(day, key(now))
         if n == 1 { return L("hôm qua", "yesterday") }
         return L("\(n) ngày trước", "\(n) days ago")
     }
@@ -156,8 +169,14 @@ struct DaySnapshot {
     var remaining: Int { today.count }
     var open: [TodoTask] { overdue + today }
 
-    /// "Eat the frog": highest priority first, then the earliest due time, then the oldest overdue.
-    var next: TodoTask? { DaySnapshot.ranked(open).first }
+    /// Open tasks in "eat the frog" order (highest priority, then earliest time, then oldest overdue).
+    /// A task that was split into open sub-steps gives way to its steps.
+    var actionable: [TodoTask] {
+        let parents = Set(open.compactMap(\.parentId))
+        return DaySnapshot.ranked(open).filter { !parents.contains($0.id) }
+    }
+
+    var next: TodoTask? { actionable.first ?? DaySnapshot.ranked(open).first }
 
     static func ranked(_ tasks: [TodoTask]) -> [TodoTask] {
         tasks.sorted { a, b in

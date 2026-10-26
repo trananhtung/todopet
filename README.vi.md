@@ -19,11 +19,15 @@ Một chú pet nhỏ cho macOS, đi dạo trên thanh Dock, đọc công việc 
 - **Làm việc với Todoist ngay trên pet.** Bấm vào pet để xem việc hôm nay, tích hoàn thành, thêm việc mới (Hôm nay / Ngày mai / Không hạn, độ ưu tiên, hoặc cú pháp quick-add của Todoist như `Gọi Lan 3pm p1 #Work`), dời việc sang hôm nay hoặc ngày mai, và xem chuỗi ngày (streak) trên Todoist.
 - **Có hẹn giờ tập trung.** Bắt đầu phiên 25 phút cho một việc, pet đeo băng đô rồi ngồi im trong góc. Hết giờ, pet hỏi bạn xong chưa; nếu xong, pet tự đánh dấu hoàn thành trên Todoist và bắt đầu giờ nghỉ.
 - **Tổng kết cuối ngày.** 30 phút trước giờ tan làm, pet cho bạn xem đã xong bao nhiêu việc và đề nghị dời phần còn lại sang mai.
+- **Bắt quả tang trang web gây xao nhãng.** Pet đọc tab đang mở trong Safari, Chrome, Arc, Edge, Brave, Cốc Cốc và các trình duyệt Chromium khác. Ngồi YouTube hay Facebook quá 2 phút trong giờ làm là pet bắt đầu nhăn nhó. Bạn tự chọn danh sách trang; quy tắc như `youtube.com/shorts` chỉ bắt đúng một phần của trang.
+- **Biết lịch họp của bạn.** Pet đọc các sự kiện hôm nay từ Lịch của macOS (gồm cả tài khoản Google, Outlook đã thêm vào Lịch). Pet nhắc trước giờ họp 5 phút kèm nút **Vào họp**, im lặng khi bạn đang họp, và không tính giờ họp là lười. Ngày nào họp nhiều thì pet hạ mục tiêu, khoảng 2 giờ trống cho 1 việc quan trọng.
+- **Gợi ý khung giờ.** Pet xếp các việc tiếp theo vào khoảng trống trong ngày ("10:00–11:00 Viết báo cáo"). Một cú bấm là đặt giờ đó cho việc trong Todoist, và pet sẽ nhắc bạn đúng giờ.
+- **Phát hiện việc bị dời mãi.** Việc nào nằm trong danh sách từ 3 ngày trở lên, pet hỏi bạn muốn chia nhỏ hay bỏ khỏi kế hoạch. Chia nhỏ là tách thành các bước 15–30 phút, thêm vào Todoist dưới dạng việc con, bước 1 vào kế hoạch hôm nay. Nếu có API key Claude, nút **Nhờ Claude gợi ý** sẽ đề xuất các bước giúp bạn.
 - **Nói tiếng Việt và tiếng Anh**, đổi trong Cài đặt.
 
-| Bảng việc | Bong bóng thoại |
-|---|---|
-| ![Bảng việc](docs/board-vi.png) | ![Bong bóng](docs/bubble-vi.png) |
+| Bảng việc | Bong bóng thoại | Chia nhỏ việc |
+|---|---|---|
+| ![Bảng việc](docs/board-vi.png) | ![Bong bóng](docs/bubble-vi.png)<br>![Việc bị dời mãi](docs/bubble-stuck-vi.png) | ![Chia nhỏ](docs/split-vi.png) |
 
 ## Cài đặt
 
@@ -47,6 +51,19 @@ Muốn xem thử trước? Chạy `open build/TodoPet.app --args --demo` để d
 2. Bấm vào pet, dán token rồi bấm **Lưu & kết nối**.
 
 Token được lưu trong **Keychain** của macOS và chỉ được gửi tới `api.todoist.com` (Todoist API v1). Sau khi build lại app, macOS có thể hỏi một lần xem TodoPet có được đọc Keychain không; chọn **Luôn cho phép**.
+
+### Các quyền macOS sẽ hỏi
+
+| Hộp thoại | Để làm gì | Nếu bạn từ chối |
+|---|---|---|
+| Lịch | Giờ họp, giờ trống, gợi ý khung giờ | Bảng việc hiện nút **Cho phép**; các tính năng khác vẫn chạy |
+| "TodoPet muốn điều khiển Safari / Chrome…" (mỗi trình duyệt một lần) | Đọc địa chỉ tab đang mở để bắt trang gây xao nhãng | Tắt phát hiện trang web cho trình duyệt đó; phát hiện app vẫn chạy |
+
+Vì app được ký ad-hoc, macOS có thể hỏi lại sau mỗi lần bạn build lại.
+
+### Chia nhỏ việc bằng Claude (tuỳ chọn)
+
+Thêm API key Anthropic trong **Cài đặt → Việc bị dời mãi** ([lấy key](https://console.anthropic.com/settings/keys)). Khi bạn bấm **Nhờ Claude gợi ý**, tên và ghi chú của việc được gửi tới Claude API, và Claude trả về 3–5 bước nhỏ. App dùng `claude-opus-5-5` ở mức effort thấp, có bật fallback phía máy chủ phòng khi yêu cầu bị từ chối. Mỗi lần khoảng 1–2 xu Mỹ; bạn đổi được model trong Cài đặt. Không có key thì bạn vẫn tự gõ các bước hoặc dùng mẫu nhanh.
 
 ### Dùng Todoist qua Claude hoặc AI khác (MCP)
 
@@ -74,24 +91,28 @@ Mochi có điểm hạnh phúc từ 0 đến 100, tính lại mỗi 15 giây. R�
 | +30 khi xong hết kế hoạch hôm nay | −4 cho mỗi việc đã trễ giờ |
 | Tới +15 ngay sau khi bạn xong một việc | −12 đến −50 khi qua hạn lên kế hoạch mà chưa đủ 3 việc |
 | +10 khi đang tập trung | Tới −30 khi hơn 90 phút không có tiến triển |
-| | Tới −35 khi ở trong app gây xao nhãng hơn 2 phút |
+| Giờ họp được tính là làm việc | Tới −35 khi ở trong app hoặc trang web gây xao nhãng hơn 2 phút |
+| | −3 cho mỗi việc bị dời mãi (tối đa −9) |
 
-Từ 75 điểm là vui, từ 50 là bình thường, từ 30 là nhăn nhó, thấp hơn nữa là nổi cáu. Ngoài giờ làm, ban đêm, hoặc khi bạn rời máy 10 phút, pet dịu lại hoặc ngủ, và không bao giờ cằn nhằn lúc bạn vắng mặt.
+Từ 75 điểm là vui, từ 50 là bình thường, từ 30 là nhăn nhó, thấp hơn nữa là nổi cáu. Ngoài giờ làm, ban đêm, khi đang họp, hoặc khi bạn rời máy 10 phút, pet dịu lại hoặc ngủ, và không bao giờ cằn nhằn lúc bạn vắng mặt.
 
 ## Khi nào pet lên tiếng
 
 Theo thứ tự ưu tiên, mỗi lúc chỉ một bong bóng:
 
-1. 10 phút trước và đúng giờ của việc có giờ cụ thể
-2. Chào buổi sáng kèm kế hoạch hôm nay (hoặc nhắc lên kế hoạch)
-3. "Hôm nay mình làm 3 việc gì nào?" mỗi 30 phút sau hạn lên kế hoạch, cho tới khi đủ việc
-4. Mở app gây xao nhãng quá 2 phút
-5. Việc quá hạn, mỗi 90 phút
-6. Tổng kết cuối ngày
-7. Nhắc việc tiếp theo, mỗi 45 phút
-8. Thỉnh thoảng một mẹo năng suất, chỉ khi pet đang vui
+1. Vài phút trước giờ họp (kể cả khi đang tập trung), sau đó im lặng tới khi họp xong
+2. 10 phút trước và đúng giờ của việc có giờ cụ thể
+3. Chào buổi sáng kèm kế hoạch hôm nay (hoặc nhắc lên kế hoạch) và tóm tắt lịch họp, giờ trống
+4. "Hôm nay mình làm 3 việc gì nào?" mỗi 30 phút sau hạn lên kế hoạch, cho tới khi đủ việc
+5. Mở app hoặc trang web gây xao nhãng quá 2 phút
+6. Việc bị dời mãi: chia nhỏ hay bỏ khỏi kế hoạch
+7. Việc quá hạn, mỗi 90 phút
+8. Mỗi ngày một lần, gợi ý khung giờ cho việc tiếp theo
+9. Tổng kết cuối ngày
+10. Nhắc việc tiếp theo, mỗi 45 phút
+11. Thỉnh thoảng một mẹo năng suất, chỉ khi pet đang vui
 
-Mọi mốc thời gian đều chỉnh được trong **Cài đặt**: số việc mỗi ngày, giờ làm, ngày làm việc, hạn lên kế hoạch, khoảng nhắc, độ dài phiên tập trung và giờ nghỉ, app gây xao nhãng, bộ lọc Todoist riêng cho "việc của tôi" (ví dụ `(today | overdue) & #Work`), kích thước pet, âm thanh, và mở cùng macOS.
+Mọi mốc thời gian đều chỉnh được trong **Cài đặt**: số việc mỗi ngày, giờ làm, ngày làm việc, hạn lên kế hoạch, khoảng nhắc, độ dài phiên tập trung và giờ nghỉ, app và trang web gây xao nhãng, tuỳ chọn Lịch, sau bao nhiêu ngày thì tính là bị dời mãi, bộ lọc Todoist riêng cho "việc của tôi" (ví dụ `(today | overdue) & #Work`), kích thước pet, âm thanh, và mở cùng macOS.
 
 ## Vì sao có những tính năng này
 
@@ -101,14 +122,18 @@ Hành vi của pet dựa trên các phương pháp năng suất phổ biến, c�
 - **Ăn con ếch trước**: bắt đầu bằng việc quan trọng nhất (Brian Tracy).
 - **Ý định thực hiện**: việc có giờ cụ thể ("14h mình sẽ…") dễ được làm hơn (Peter Gollwitzer). Pet nhắc bạn đúng giờ.
 - **Pomodoro**: các phiên tập trung ngắn có hẹn giờ, xen kẽ nghỉ (Francesco Cirillo).
-- **Bị gián đoạn rất tốn kém**: quay lại việc sau khi chuyển sang thứ khác mất khá lâu (nghiên cứu của Gloria Mark), nên pet nhắc khi bạn mở app gây xao nhãng và im lặng khi bạn tập trung.
+- **Bị gián đoạn rất tốn kém**: quay lại việc sau khi chuyển sang thứ khác mất khá lâu (nghiên cứu của Gloria Mark), nên pet nhắc khi bạn mở app hoặc trang web gây xao nhãng, và im lặng khi bạn tập trung hoặc đang họp.
+- **Chặn lịch (time blocking)**: gắn cho việc một khung giờ trong lịch giúp giữ thời gian cho nó; pet tìm các khoảng trống giữa các cuộc họp.
+- **Trì hoãn thường do việc quá to hoặc mơ hồ**: tách ra một bước đầu nhỏ, cụ thể sẽ dễ bắt tay vào hơn, nên pet gợi ý chia nhỏ những việc bạn cứ dời mãi.
 - **Nghi thức kết thúc ngày**: khép lại ngày bằng cách xem lại và dời việc (Cal Newport).
 - **Phản hồi cảm xúc**: một nhân vật phản ứng rõ ràng với tiến độ của bạn khiến việc hoàn thành có cảm giác được thưởng, còn lười thì hơi áy náy.
 
 ## Quyền riêng tư
 
-- Không thu thập dữ liệu, không có máy chủ riêng. Kết nối mạng duy nhất là tới `api.todoist.com`.
-- Phát hiện xao nhãng chỉ đọc **tên app đang mở phía trước** (không quay màn hình, không cần quyền trợ năng, không đọc tab trình duyệt).
+- Không thu thập dữ liệu, không có máy chủ riêng. Kết nối mạng chỉ tới `api.todoist.com`, và tới `api.anthropic.com` khi bạn bấm **Nhờ Claude gợi ý**.
+- Phát hiện xao nhãng đọc **tên app đang mở phía trước** và, nếu đó là trình duyệt, **địa chỉ tab đang mở**. Địa chỉ chỉ nằm trong bộ nhớ, không được lưu hay gửi đi đâu. Không cần quay màn hình hay quyền trợ năng.
+- Lịch được đọc ngay trên máy qua macOS (EventKit); sự kiện không rời khỏi máy bạn.
+- Nhật ký "việc bị dời mãi" chỉ gồm mã việc và ngày, lưu trong cài đặt cục bộ của app.
 - Phát hiện vắng mặt chỉ đọc "số giây từ lần gõ phím/di chuột cuối", không cần cấp quyền.
 
 ## Phát triển

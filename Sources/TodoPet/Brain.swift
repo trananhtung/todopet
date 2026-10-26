@@ -56,11 +56,23 @@ final class Brain: ObservableObject {
     @Published var errorText: String?
     @Published var bubble: Bubble?
     @Published private(set) var quietUntil: Date?
+    /// Today's target: the daily target, lowered on meeting-heavy days.
+    @Published private(set) var target = 3
+    @Published private(set) var events: [CalEvent] = []
+    @Published private(set) var calendarAccess: CalendarAccess = .notDetermined
+    @Published private(set) var suggestions: [SlotSuggestion] = []
+    @Published private(set) var stuck: [StuckTask] = []
+    @Published private(set) var browserDenied: [String] = []
+    @Published private(set) var hasClaudeKey = false
 
-    /// Set by the app: open the task board (optionally focusing the "add task" field) and settings.
+    /// Set by the app: open the task board (optionally focusing the "add task" field), the split view, and settings.
     var openBoard: ((_ focusAdd: Bool) -> Void)?
+    var openBreakdown: ((TodoTask) -> Void)?
     var openSettings: (() -> Void)?
 
+    private let calendar = CalendarWatcher()
+    private lazy var browser = BrowserWatcher { [weak self] in self?.frontApp?.bundle }
+    private var tracker = StuckTracker()
     private var service: TodoService?
     private var active: [TodoTask] = []
     private var completed: [TodoTask] = []
@@ -84,7 +96,10 @@ final class Brain: ObservableObject {
         self.prefs = prefs
         if demo {
             useDemo()
-        } else if let token = Keychain.read() ?? ProcessInfo.processInfo.environment["TODOIST_API_TOKEN"] {
+            return
+        }
+        hasClaudeKey = Keychain.read(.anthropic) != nil
+        if let token = Keychain.read() ?? ProcessInfo.processInfo.environment["TODOIST_API_TOKEN"] {
             service = TodoistClient(token: token)
             hasToken = true
         }
@@ -96,6 +111,7 @@ final class Brain: ObservableObject {
             let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
             MainActor.assumeIsolated {
                 self?.frontApp = (app?.localizedName ?? "", app?.bundleIdentifier ?? "", Date())
+                self?.browser.poll()
             }
         }
         ws.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
@@ -105,8 +121,27 @@ final class Brain: ObservableObject {
             frontApp = (app.localizedName ?? "", app.bundleIdentifier ?? "", Date())
         }
         prefs.objectWillChange.receive(on: DispatchQueue.main).sink { [weak self] _ in
-            MainActor.assumeIsolated { self?.recompute() }
+            MainActor.assumeIsolated {
+                self?.refreshCalendar()
+                self?.recompute()
+            }
         }.store(in: &cancellables)
+
+        browser.onDeniedChange = { [weak self] in
+            guard let self else { return }
+            browserDenied = BrowserWatcher.browsers.filter { self.browser.denied.contains($0.bundleID) }.map(\.name)
+        }
+        browser.start()
+        calendar.onChange { [weak self] in
+            MainActor.assumeIsolated {
+                self?.refreshCalendar()
+                self?.recompute()
+            }
+        }
+        if prefs.useCalendar && calendar.access == .notDetermined {
+            requestCalendarAccess()
+        }
+        refreshCalendar()
 
         timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
@@ -158,6 +193,16 @@ final class Brain: ObservableObject {
         service = DemoService()
         hasToken = true
         isDemo = true
+        tracker = StuckTracker(persist: false)
+        let now = Date()
+        let soon = DayMath.at(hour: DayMath.hour(now) + 1, on: now)
+        let later = DayMath.at(hour: DayMath.hour(now) + 4, on: now)
+        calendar.demoEvents = [
+            CalEvent(id: "demo-1", title: L("Họp team", "Team sync"), start: soon, end: soon.addingTimeInterval(3600),
+                     joinURL: URL(string: "https://meet.google.com/abc-defg-hij")),
+            CalEvent(id: "demo-2", title: L("Gặp khách hàng", "Client meeting"), start: later, end: later.addingTimeInterval(2700), joinURL: nil),
+        ]
+        refreshCalendar()
         resetDay()
         refreshSoon()
         say(Bubble(text: L("Đang chạy demo với dữ liệu giả 🎭 Bấm vào mình để mở bảng việc nhé!",
@@ -221,7 +266,29 @@ final class Brain: ObservableObject {
         }
         knownCompleted = ids.union(completedViaPet)
         didLoadOnce = true
+        tracker.record(DaySnapshot.build(active: act, completed: completed, now: Date()).open, now: Date())
         recompute()
+    }
+
+    private func refreshCalendar() {
+        calendarAccess = calendar.access
+        events = prefs.useCalendar ? calendar.events(on: Date()) : []
+    }
+
+    func requestCalendarAccess() {
+        Task {
+            _ = await calendar.requestAccess()
+            refreshCalendar()
+            recompute()
+        }
+    }
+
+    func retryBrowsers() { browser.resetDenied() }
+
+    func setClaudeKey(_ key: String?) {
+        let k = key?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if k.isEmpty { Keychain.delete(.anthropic) } else { Keychain.save(k, .anthropic) }
+        hasClaudeKey = Keychain.read(.anthropic) != nil
     }
 
     private func resetDay() {
@@ -258,11 +325,18 @@ final class Brain: ObservableObject {
         var p = max(start, lastPlanAction, lastCelebration)
         if let latest = day.completed.compactMap(\.completedDate).max() { p = max(p, latest) }
         if let f = focus { p = max(p, min(now, f.start)) }
+        // Time in meetings counts as work.
+        if let meetingEnd = events.filter({ $0.start <= now }).map({ min($0.end, now) }).max() { p = max(p, meetingEnd) }
         return p
     }
 
     private var distraction: (app: String, minutes: Double)? {
-        guard let f = frontApp, Date() > distractionSnoozedUntil else { return nil }
+        guard Date() > distractionSnoozedUntil else { return nil }
+        if prefs.watchBrowsers, let v = browser.visit,
+           BrowserWatcher.match(host: v.host, url: v.url, rules: prefs.siteRules) != nil {
+            return (v.host, Date().timeIntervalSince(v.since) / 60)
+        }
+        guard let f = frontApp else { return nil }
         let name = f.name.lowercased(), bundle = f.bundle.lowercased()
         guard prefs.distractionList.contains(where: { name.contains($0) || bundle.contains($0) }) else { return nil }
         return (f.name, Date().timeIntervalSince(f.since) / 60)
@@ -272,13 +346,28 @@ final class Brain: ObservableObject {
         let now = Date()
         day = DaySnapshot.build(active: active, completed: completed, now: now)
         let ctx = context(now)
+        browser.enabled = prefs.watchBrowsers
+
+        let dayStart = DayMath.at(hour: prefs.workStart, on: now)
+        let dayEnd = DayMath.at(hour: prefs.workEnd, on: now)
+        let newTarget = prefs.adaptTarget && !events.isEmpty
+            ? CalendarMath.target(freeMinutes: CalendarMath.freeMinutes(events, from: dayStart, to: dayEnd), maxTarget: prefs.dailyTarget)
+            : prefs.dailyTarget
+        if target != newTarget { target = newTarget }
+        let newSuggestions = ctx.inWork ? CalendarMath.suggest(tasks: day.actionable, events: events, now: now, dayEnd: dayEnd) : []
+        if suggestions != newSuggestions { suggestions = newSuggestions }
+        let newStuck = tracker.stuck(day.open, minDays: prefs.stuckDays, now: now)
+        if stuck != newStuck { stuck = newStuck }
+
         var i = MoodInputs()
         i.hasToken = hasToken
         i.workday = ctx.workday
         i.inWorkHours = ctx.inWork
         i.night = ctx.night
         i.hoursAfterPlanDeadline = ctx.hoursAfterPlanDeadline
-        i.target = prefs.dailyTarget
+        i.target = target
+        i.inMeeting = CalendarMath.current(events, at: now) != nil
+        i.stuck = stuck.count
         i.planned = day.planned
         i.completed = day.completed.count
         i.remaining = day.remaining
@@ -338,6 +427,7 @@ final class Brain: ObservableObject {
         }
         if let f = focus, now >= f.end { finishFocus() }
         if hasToken, !loading, lastSync.map({ now.timeIntervalSince($0) > 180 }) ?? true { refreshSoon() }
+        refreshCalendar()
         recompute()
         runRules(now)
     }
@@ -357,19 +447,35 @@ final class Brain: ObservableObject {
     private func runRules(_ now: Date) {
         if let q = quietUntil, now < q { return }
         quietUntil = nil
-        if focus != nil { return }
 
         let idle = Brain.idleSeconds()
         if idle > 300 {
             if awaySince == nil { awaySince = now.addingTimeInterval(-idle) }
             return
         }
+
+        // Meetings come first, even during a focus session; during a meeting the pet stays quiet.
+        if let e = CalendarMath.next(events, after: now) {
+            let mins = e.start.timeIntervalSince(now) / 60
+            if mins <= Double(prefs.meetingLead), once("meeting-\(e.id)") {
+                var actions: [BubbleAction] = []
+                if let url = e.joinURL {
+                    actions.append(BubbleAction(title: L("Vào họp ↗", "Join ↗"), primary: true) { NSWorkspace.shared.open(url) })
+                }
+                actions.append(BubbleAction(title: "OK") {})
+                say(Bubble(text: Lines.meetingSoon(e, minutes: max(1, Int(mins.rounded(.up)))), actions: actions, seconds: 90, urgent: true))
+                return
+            }
+        }
+        if CalendarMath.current(events, at: now) != nil { return }
+        if focus != nil { return }
+
         guard hasToken else {
             if every("token", minutes: 60) { askForToken() }
             return
         }
         let ctx = context(now)
-        let target = prefs.dailyTarget
+        let target = self.target
 
         if let away = awaySince {
             awaySince = nil
@@ -416,7 +522,14 @@ final class Brain: ObservableObject {
         if ctx.inWork, once("morning-\(dayKey)") {
             let needsPlan = day.planned < target
             if needsPlan { fired["plan"] = now }
-            say(Bubble(text: Lines.morning(now, day: day, target: target),
+            var text = Lines.morning(now, day: day, target: target)
+            if !events.isEmpty {
+                let start = DayMath.at(hour: prefs.workStart, on: now), end = DayMath.at(hour: prefs.workEnd, on: now)
+                let free = CalendarMath.freeMinutes(events, from: start, to: end)
+                text += "\n" + Lines.calendarDay(meetings: events.count, busyMinutes: end.timeIntervalSince(start) / 60 - free,
+                                                 freeMinutes: free, target: target, reduced: target < prefs.dailyTarget)
+            }
+            say(Bubble(text: text,
                        actions: needsPlan ? planActions() : (day.next.map { [focusAction($0), laterAction()] } ?? []),
                        seconds: 60))
             return
@@ -439,7 +552,18 @@ final class Brain: ObservableObject {
             return
         }
 
-        // 6. Overdue tasks.
+        // 6. A task that keeps getting postponed: offer to split it (or drop it). Once per task per day.
+        if ctx.inWork, let s = stuck.first(where: { fired["stuck-\($0.task.id)-\(dayKey)"] == nil }), every("stuck", minutes: 120) {
+            fired["stuck-\(s.task.id)-\(dayKey)"] = now
+            say(Bubble(text: Lines.stuck(s, mood: mood), actions: [
+                BubbleAction(title: L("✂️ Chia nhỏ", "✂️ Split it"), primary: true) { [weak self] in self?.openBreakdown?(s.task) },
+                BubbleAction(title: L("Bỏ khỏi kế hoạch", "Drop from plan")) { [weak self] in self?.unplan(s.task) },
+                laterAction(),
+            ], seconds: 60))
+            return
+        }
+
+        // 7. Overdue tasks.
         if ctx.inWork, !day.overdue.isEmpty, every("overdue", minutes: 90) {
             say(Bubble(text: Lines.overdue(mood: mood, count: day.overdue.count), actions: [
                 BubbleAction(title: L("Dời vào hôm nay", "Move to today"), primary: true) { [weak self] in self?.pullOverdueToToday() },
@@ -448,7 +572,17 @@ final class Brain: ObservableObject {
             return
         }
 
-        // 7. End-of-day review (shutdown ritual).
+        // 8. Give the next task a concrete time slot (implementation intention), once a day.
+        if ctx.inWork, day.planned >= target, let s = suggestions.first, s.start.timeIntervalSince(now) < 3 * 3600,
+           once("timeblock-\(dayKey)") {
+            say(Bubble(text: Lines.timeBlock(s), actions: [
+                BubbleAction(title: L("⏰ Đặt giờ", "⏰ Set time"), primary: true) { [weak self] in self?.schedule(s) },
+                laterAction(),
+            ], seconds: 60))
+            return
+        }
+
+        // 9. End-of-day review (shutdown ritual).
         if ctx.inWork, now >= ctx.reviewTime, day.remaining > 0, once("review-\(dayKey)") {
             say(Bubble(text: Lines.review(completed: day.completed.count, planned: day.planned, remaining: day.remaining), actions: [
                 BubbleAction(title: L("Dời sang mai", "Move to tomorrow"), primary: true) { [weak self] in self?.moveTodayToTomorrow() },
@@ -457,7 +591,7 @@ final class Brain: ObservableObject {
             return
         }
 
-        // 8. Regular nudge with the next task.
+        // 10. Regular nudge with the next task.
         let minutes = Double(prefs.remindEvery)
         if ctx.inWork, let next = day.next, now.timeIntervalSince(lastBubbleAt) > minutes * 60, every("nudge", minutes: minutes) {
             let idleHours = now.timeIntervalSince(lastProgress) / 3600
@@ -466,7 +600,7 @@ final class Brain: ObservableObject {
             return
         }
 
-        // 9. A tip now and then, only when the mood is good.
+        // 11. A tip now and then, only when the mood is good.
         if ctx.inWork, mood == .happy || mood == .normal, now.timeIntervalSince(lastBubbleAt) > 40 * 60,
            every("tip", minutes: 150) {
             say(Bubble(text: Lines.tip(), seconds: 14))
@@ -502,7 +636,7 @@ final class Brain: ObservableObject {
             actions.append(BubbleAction(title: L("Hoàn tác", "Undo")) { [weak self] in self?.undoComplete(task) })
         }
         if let task {
-            bubble = Bubble(text: Lines.done(task, completed: day.completed.count, target: prefs.dailyTarget),
+            bubble = Bubble(text: Lines.done(task, completed: day.completed.count, target: target),
                             actions: actions, seconds: 8, urgent: true)
             lastBubbleAt = now
         }
@@ -557,9 +691,9 @@ final class Brain: ObservableObject {
         do {
             switch due {
             case .smart: try await service.quickAdd(text: content)
-            case .today: try await service.addTask(content: content, dueString: "today", priority: priority)
-            case .tomorrow: try await service.addTask(content: content, dueString: "tomorrow", priority: priority)
-            case .none: try await service.addTask(content: content, dueString: nil, priority: priority)
+            case .today: try await service.addTask(content: content, dueString: "today", priority: priority, parentId: nil)
+            case .tomorrow: try await service.addTask(content: content, dueString: "tomorrow", priority: priority, parentId: nil)
+            case .none: try await service.addTask(content: content, dueString: nil, priority: priority, parentId: nil)
             }
         } catch {
             errorText = error.localizedDescription
@@ -567,7 +701,7 @@ final class Brain: ObservableObject {
         }
         lastPlanAction = Date()
         await refresh()
-        let target = prefs.dailyTarget
+        let target = self.target
         if plannedBefore < target, day.planned >= target {
             lastCelebration = Date()
             recompute()
@@ -605,6 +739,66 @@ final class Brain: ObservableObject {
             await refresh()
             say(Bubble(text: L("Đã dời \(tasks.count) việc sang mai. Nghỉ ngơi nhé 🌙", "Moved \(tasks.count) task(s) to tomorrow. Rest well 🌙"), seconds: 8))
         }
+    }
+
+    /// Gives a task the suggested time today, so the pet can remind you right on time.
+    func schedule(_ s: SlotSuggestion) {
+        guard let service else { return }
+        lastPlanAction = Date()
+        Task {
+            do {
+                try await service.reschedule(id: s.task.id, dueString: "today at " + DayMath.timeString(s.start))
+            } catch {
+                errorText = error.localizedDescription
+                return
+            }
+            await refresh()
+            say(Bubble(text: Lines.timeSet(s.task, at: s.start), seconds: 6, urgent: true))
+        }
+    }
+
+    /// Takes a task off today's plan without deleting it (it stays in Todoist with no date).
+    func unplan(_ task: TodoTask) {
+        guard let service else { return }
+        lastPlanAction = Date()
+        Task {
+            do {
+                try await service.reschedule(id: task.id, dueString: "no date")
+            } catch {
+                errorText = error.localizedDescription
+                return
+            }
+            await refresh()
+            say(Bubble(text: Lines.unplanned(task), seconds: 6, urgent: true))
+        }
+    }
+
+    func suggestSteps(for task: TodoTask) async throws -> [String] {
+        guard let key = Keychain.read(.anthropic) else { throw ClaudeError.noKey }
+        return try await ClaudeClient(apiKey: key, model: prefs.effectiveClaudeModel).breakdown(title: task.title, notes: task.description)
+    }
+
+    /// Adds the steps as Todoist sub-tasks; the first one goes on today's plan.
+    func split(_ task: TodoTask, into steps: [String], firstToday: Bool) async -> Bool {
+        let clean = steps.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        guard let service, let firstTitle = clean.first else { return false }
+        var first: TodoTask?
+        do {
+            for (i, step) in clean.enumerated() {
+                let created = try await service.addTask(content: step, dueString: i == 0 && firstToday ? "today" : nil,
+                                                        priority: task.apiPriority, parentId: task.id)
+                if i == 0 { first = created }
+            }
+        } catch {
+            errorText = error.localizedDescription
+            return false
+        }
+        lastPlanAction = Date()
+        await refresh()
+        let start = first.flatMap { f in day.open.first { $0.id == f.id } }
+        say(Bubble(text: Lines.splitDone(count: clean.count, first: firstTitle),
+                   actions: start.map { [focusAction($0)] } ?? [], seconds: 30, urgent: true))
+        return true
     }
 
     // MARK: - Focus (Pomodoro)

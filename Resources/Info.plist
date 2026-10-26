@@ -33,6 +33,12 @@
 	<string>public.app-category.productivity</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>TodoPet reads the address of the active browser tab to notice distracting websites during work hours. The address stays on your Mac.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>TodoPet reads today's meetings to stay quiet during them, remind you before they start, and find free time for your tasks.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>TodoPet reads today's meetings to stay quiet during them, remind you before they start, and find free time for your tasks.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>MIT License</string>
 </dict>

@@ -25,7 +25,8 @@ protocol TodoService: AnyObject {
     func activeTasks(filter: String) async throws -> [TodoTask]
     func completedTasks(since: Date, until: Date) async throws -> [TodoTask]
     func stats() async throws -> ProductivityStats
-    func addTask(content: String, dueString: String?, priority: Int) async throws
+    @discardableResult
+    func addTask(content: String, dueString: String?, priority: Int, parentId: String?) async throws -> TodoTask?
     func quickAdd(text: String) async throws
     func close(id: String) async throws
     func reopen(id: String) async throws
@@ -120,13 +121,14 @@ final class TodoistClient: TodoService {
         try decoder.decode(ProductivityStats.self, from: try await send("GET", "tasks/completed/stats"))
     }
 
-    func addTask(content: String, dueString: String?, priority: Int) async throws {
+    func addTask(content: String, dueString: String?, priority: Int, parentId: String?) async throws -> TodoTask? {
         var body: [String: Any] = ["content": content, "priority": priority]
         if let dueString {
             body["due_string"] = dueString
             body["due_lang"] = "en"
         }
-        try await send("POST", "tasks", body: body)
+        if let parentId { body["parent_id"] = parentId }
+        return try? decoder.decode(TodoTask.self, from: try await send("POST", "tasks", body: body))
     }
 
     func quickAdd(text: String) async throws {
@@ -155,7 +157,7 @@ final class DemoService: TodoService {
 
     init(now: Date = Date()) {
         let today = DayMath.key(now)
-        let yesterday = DayMath.key(now.addingTimeInterval(-86_400))
+        let threeDaysAgo = DayMath.key(now.addingTimeInterval(-3 * 86_400))
         let soon = DayMath.at(hour: DayMath.hour(now) + 1, on: now)
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
@@ -165,7 +167,7 @@ final class DemoService: TodoService {
             TodoTask(id: "2", content: L("Gọi cho khách hàng ABC", "Call client ABC"), priority: 3,
                      due: TodoDue(date: f.string(from: soon), string: "today")),
             TodoTask(id: "3", content: L("Trả lời email của sếp", "Reply to the boss's email"), priority: 1,
-                     due: TodoDue(date: yesterday, string: "yesterday")),
+                     due: TodoDue(date: threeDaysAgo, string: "Monday")),
         ]
     }
 
@@ -179,7 +181,7 @@ final class DemoService: TodoService {
                           karma: 1234)
     }
 
-    func addTask(content: String, dueString: String?, priority: Int) async throws {
+    func addTask(content: String, dueString: String?, priority: Int, parentId: String?) async throws -> TodoTask? {
         await pause()
         counter += 1
         let now = Date()
@@ -188,12 +190,14 @@ final class DemoService: TodoService {
         case "tomorrow": DayMath.key(now.addingTimeInterval(86_400))
         default: nil
         }
-        active.append(TodoTask(id: "\(counter)", content: content, priority: priority,
-                               due: day.map { TodoDue(date: $0, string: dueString) }))
+        let t = TodoTask(id: "\(counter)", content: content, priority: priority,
+                         due: day.map { TodoDue(date: $0, string: dueString) }, parentId: parentId)
+        if day == DayMath.key(now) { active.append(t) }
+        return t
     }
 
     func quickAdd(text: String) async throws {
-        try await addTask(content: text, dueString: "today", priority: 1)
+        _ = try await addTask(content: text, dueString: "today", priority: 1, parentId: nil)
     }
 
     func close(id: String) async throws {
@@ -218,8 +222,12 @@ final class DemoService: TodoService {
         await pause()
         guard let i = active.firstIndex(where: { $0.id == id }) else { return }
         let now = Date()
-        let day = dueString == "tomorrow" ? DayMath.key(now.addingTimeInterval(86_400)) : DayMath.key(now)
-        active[i].due = TodoDue(date: day, string: dueString)
-        if dueString == "tomorrow" { active.remove(at: i) }
+        if dueString == "tomorrow" || dueString == "no date" {
+            active.remove(at: i)
+        } else if dueString.hasPrefix("today at "), let time = dueString.split(separator: " ").last {
+            active[i].due = TodoDue(date: DayMath.key(now) + "T" + time + ":00", string: dueString)
+        } else {
+            active[i].due = TodoDue(date: DayMath.key(now), string: dueString)
+        }
     }
 }

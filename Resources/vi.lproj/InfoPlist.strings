@@ -1,0 +1,3 @@
+"NSAppleEventsUsageDescription" = "TodoPet đọc địa chỉ tab trình duyệt đang mở để nhận ra trang web gây xao nhãng trong giờ làm. Địa chỉ chỉ ở trên máy bạn.";
+"NSCalendarsFullAccessUsageDescription" = "TodoPet đọc các cuộc họp hôm nay để im lặng khi bạn họp, nhắc trước giờ họp và tìm giờ trống cho việc của bạn.";
+"NSCalendarsUsageDescription" = "TodoPet đọc các cuộc họp hôm nay để im lặng khi bạn họp, nhắc trước giờ họp và tìm giờ trống cho việc của bạn.";

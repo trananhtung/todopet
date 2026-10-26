@@ -3,6 +3,8 @@ import SwiftUI
 
 final class BoardState: ObservableObject {
     @Published var focusAddToken = UUID()
+    /// When set, the board shows the "split this task" view.
+    @Published var breakdown: TodoTask?
 }
 
 enum PriorityStyle {
@@ -40,7 +42,9 @@ struct BoardView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
-            if brain.hasToken {
+            if brain.hasToken, let task = state.breakdown {
+                BreakdownView(task: task, brain: brain, state: state)
+            } else if brain.hasToken {
                 content
             } else {
                 TokenSetupView(brain: brain, prefs: prefs)
@@ -59,14 +63,14 @@ struct BoardView: View {
                 Text("\(prefs.petName) \(brain.mood.label) \(brain.mood.emoji)")
                     .font(.system(size: 14, weight: .bold, design: .rounded))
                 HStack(spacing: 4) {
-                    ForEach(0..<max(prefs.dailyTarget, brain.day.planned), id: \.self) { i in
+                    ForEach(0..<max(brain.target, brain.day.planned), id: \.self) { i in
                         Circle()
                             .fill(i < brain.day.completed.count ? Color.green : (i < brain.day.planned ? Color.primary.opacity(0.25) : Color.clear))
                             .overlay(Circle().stroke(Color.primary.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: i < brain.day.planned ? [] : [2])))
                             .frame(width: 9, height: 9)
                     }
-                    Text(L("Xong \(brain.day.completed.count)/\(max(brain.day.planned, prefs.dailyTarget)) hôm nay",
-                           "\(brain.day.completed.count)/\(max(brain.day.planned, prefs.dailyTarget)) done today"))
+                    Text(L("Xong \(brain.day.completed.count)/\(max(brain.day.planned, brain.target)) hôm nay",
+                           "\(brain.day.completed.count)/\(max(brain.day.planned, brain.target)) done today"))
                         .font(.caption).foregroundColor(.secondary)
                 }
                 if let reason = brain.reasons.first {
@@ -95,11 +99,11 @@ struct BoardView: View {
                 Label(L("Đang chạy chế độ demo — dữ liệu giả.", "Demo mode — sample data."), systemImage: "theatermasks")
                     .font(.caption).foregroundColor(.purple)
             }
-            if brain.day.planned < prefs.dailyTarget {
+            if brain.day.planned < brain.target {
                 HStack(alignment: .top, spacing: 8) {
                     Text("📝")
-                    Text(L("Hôm nay mới có \(brain.day.planned)/\(prefs.dailyTarget) việc. Thêm việc quan trọng nhất trước nhé!",
-                           "Only \(brain.day.planned)/\(prefs.dailyTarget) tasks planned. Add the most important one first!"))
+                    Text(L("Hôm nay mới có \(brain.day.planned)/\(brain.target) việc. Thêm việc quan trọng nhất trước nhé!",
+                           "Only \(brain.day.planned)/\(brain.target) tasks planned. Add the most important one first!"))
                         .font(.callout)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -111,6 +115,9 @@ struct BoardView: View {
             if let next = brain.day.next {
                 FrogCard(task: next, brain: brain, prefs: prefs)
             }
+            if prefs.useCalendar {
+                CalendarCard(brain: brain, prefs: prefs)
+            }
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
                     if !brain.day.overdue.isEmpty {
@@ -120,14 +127,14 @@ struct BoardView: View {
                                     .buttonStyle(.link).font(.caption)
                             }
                         }
-                        ForEach(brain.day.overdue) { TaskRow(task: $0, brain: brain, overdue: true) }
+                        ForEach(brain.day.overdue) { TaskRow(task: $0, brain: brain, state: state, overdue: true) }
                     }
                     sectionTitle(L("Hôm nay", "Today"), count: brain.day.today.count, color: .primary) { EmptyView() }
                     if brain.day.today.isEmpty {
                         Text(L("Chưa có việc nào cho hôm nay.", "Nothing planned for today yet."))
                             .font(.callout).foregroundColor(.secondary).padding(.vertical, 4)
                     }
-                    ForEach(brain.day.today) { TaskRow(task: $0, brain: brain, overdue: false) }
+                    ForEach(brain.day.today) { TaskRow(task: $0, brain: brain, state: state, overdue: false) }
                     if !brain.day.completed.isEmpty {
                         DisclosureGroup {
                             ForEach(brain.day.completed) { t in
@@ -146,7 +153,7 @@ struct BoardView: View {
                     }
                 }
             }
-            .frame(maxHeight: 260)
+            .frame(maxHeight: 220)
             if let e = brain.errorText {
                 Text("⚠️ " + e).font(.caption).foregroundColor(.red).fixedSize(horizontal: false, vertical: true)
             }
@@ -234,8 +241,11 @@ struct FrogCard: View {
 struct TaskRow: View {
     let task: TodoTask
     @ObservedObject var brain: Brain
+    @ObservedObject var state: BoardState
     let overdue: Bool
     @State private var hover = false
+
+    private var stuckDays: Int? { brain.stuck.first { $0.task.id == task.id }?.days }
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -255,6 +265,10 @@ struct TaskRow: View {
                     if overdue, let d = task.dueDay {
                         Label(DayMath.daysAgo(d), systemImage: "calendar").foregroundColor(.red)
                     }
+                    if let n = stuckDays {
+                        Text(L("⏳ dời \(n) ngày", "⏳ \(n) days")).foregroundColor(.orange)
+                            .help(L("Việc này cứ bị dời mãi — thử chia nhỏ (✂️)", "This keeps getting postponed — try splitting it (✂️)"))
+                    }
                     if task.isRecurring { Image(systemName: "repeat") }
                     ForEach(task.labels ?? [], id: \.self) { Text("@\($0)") }
                 }
@@ -265,6 +279,8 @@ struct TaskRow: View {
             if hover {
                 Button { brain.startFocus(task) } label: { Image(systemName: "play.fill") }
                     .buttonStyle(.borderless).help(L("Tập trung vào việc này", "Focus on this"))
+                Button { state.breakdown = task } label: { Image(systemName: "scissors") }
+                    .buttonStyle(.borderless).help(L("Chia nhỏ thành các bước", "Split into small steps"))
                 if !task.isRecurring {
                     Button { brain.reschedule(task, to: overdue ? "today" : "tomorrow") } label: {
                         Image(systemName: overdue ? "arrow.down.to.line" : "arrow.right.to.line")
@@ -429,6 +445,9 @@ final class BoardController: NSObject, NSPopoverDelegate {
     }
 
     nonisolated func popoverDidClose(_ notification: Notification) {
-        MainActor.assumeIsolated { onShownChanged?(false) }
+        MainActor.assumeIsolated {
+            state.breakdown = nil
+            onShownChanged?(false)
+        }
     }
 }

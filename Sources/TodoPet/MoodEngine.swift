@@ -47,6 +47,8 @@ struct MoodInputs {
     var idleMinutes: Double = 0
     var focusing = false
     var celebratingNow = false
+    var inMeeting = false
+    var stuck = 0
 }
 
 struct MoodReason: Identifiable, Hashable {
@@ -81,7 +83,10 @@ enum MoodEngine {
         if i.late > 0 {
             add(-Double(min(i.late, 3)) * 4, L("\(i.late) việc đã trễ giờ", "\(i.late) task(s) past their time"))
         }
-        if i.workday && i.inWorkHours {
+        if i.stuck > 0 {
+            add(-Double(min(i.stuck, 3)) * 3, L("\(i.stuck) việc bị dời mãi", "\(i.stuck) task(s) keep getting postponed"))
+        }
+        if i.workday && i.inWorkHours && !i.inMeeting {
             if i.hoursAfterPlanDeadline >= 0 && i.planned < i.target {
                 let gap = Double(i.target - i.planned)
                 add(-(12 + gap * 6 + min(20, i.hoursAfterPlanDeadline * 8)),

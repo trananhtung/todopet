@@ -4,7 +4,7 @@ import Combine
 /// User preferences, persisted in UserDefaults. The Todoist token lives in the Keychain instead.
 final class Prefs: ObservableObject {
     static let shared = Prefs()
-    private let d = UserDefaults.standard
+    private let d: UserDefaults
 
     @Published var lang: Lang { didSet { currentLang = lang; d.set(lang.rawValue, forKey: "lang") } }
     @Published var petName: String { didSet { d.set(petName, forKey: "petName") } }
@@ -26,18 +26,35 @@ final class Prefs: ObservableObject {
     @Published var workSunday: Bool { didSet { d.set(workSunday, forKey: "workSunday") } }
     @Published var petScale: Double { didSet { d.set(petScale, forKey: "petScale") } }
     @Published var chaseWhenAngry: Bool { didSet { d.set(chaseWhenAngry, forKey: "chaseWhenAngry") } }
+    /// Read the active browser tab to notice distracting websites.
+    @Published var watchBrowsers: Bool { didSet { d.set(watchBrowsers, forKey: "watchBrowsers") } }
+    /// Comma-separated sites ("youtube.com") or address parts ("youtube.com/shorts").
+    @Published var distractionSites: String { didSet { d.set(distractionSites, forKey: "distractionSites") } }
+    @Published var useCalendar: Bool { didSet { d.set(useCalendar, forKey: "useCalendar") } }
+    /// Lower the daily target on meeting-heavy days.
+    @Published var adaptTarget: Bool { didSet { d.set(adaptTarget, forKey: "adaptTarget") } }
+    @Published var meetingLead: Int { didSet { d.set(meetingLead, forKey: "meetingLead") } }
+    /// After this many days on your list, a task counts as "keeps getting postponed".
+    @Published var stuckDays: Int { didSet { d.set(stuckDays, forKey: "stuckDays") } }
+    @Published var claudeModel: String { didSet { d.set(claudeModel, forKey: "claudeModel") } }
 
     /// First time the app ever ran; used so day one doesn't start with a grumpy pet.
     let firstLaunch: Date
 
     static let defaultFilter = "today | overdue"
 
-    init() {
+    /// `defaults` can be a throwaway suite (snapshots), so dev tools never touch your real settings.
+    init(defaults: UserDefaults = .standard) {
+        d = defaults
         d.register(defaults: [
             "petName": "Mochi", "dailyTarget": 3, "workStart": 8, "workEnd": 18, "planDeadline": 10,
             "remindEvery": 45, "focusMinutes": 25, "breakMinutes": 5, "filterQuery": Prefs.defaultFilter,
             "distractionApps": "TikTok, Netflix, Steam, Facebook", "soundOn": true,
             "workSaturday": false, "workSunday": false, "petScale": 1.0, "chaseWhenAngry": true,
+            "watchBrowsers": true,
+            "distractionSites": "youtube.com, facebook.com, tiktok.com, instagram.com, x.com, reddit.com, netflix.com",
+            "useCalendar": true, "adaptTarget": true, "meetingLead": 5, "stuckDays": 3,
+            "claudeModel": ClaudeClient.defaultModel,
         ])
         lang = Lang(rawValue: d.string(forKey: "lang") ?? "") ?? .systemDefault
         petName = d.string(forKey: "petName") ?? "Mochi"
@@ -55,6 +72,13 @@ final class Prefs: ObservableObject {
         workSunday = d.bool(forKey: "workSunday")
         petScale = d.double(forKey: "petScale")
         chaseWhenAngry = d.bool(forKey: "chaseWhenAngry")
+        watchBrowsers = d.bool(forKey: "watchBrowsers")
+        distractionSites = d.string(forKey: "distractionSites") ?? ""
+        useCalendar = d.bool(forKey: "useCalendar")
+        adaptTarget = d.bool(forKey: "adaptTarget")
+        meetingLead = d.integer(forKey: "meetingLead")
+        stuckDays = d.integer(forKey: "stuckDays")
+        claudeModel = d.string(forKey: "claudeModel") ?? ClaudeClient.defaultModel
         if let f = d.object(forKey: "firstLaunch") as? Date {
             firstLaunch = f
         } else {
@@ -73,6 +97,21 @@ final class Prefs: ObservableObject {
         distractionApps.split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
             .filter { !$0.isEmpty }
+    }
+
+    var siteRules: [String] {
+        distractionSites.split(separator: ",")
+            .map { rule -> String in
+                var r = rule.trimmingCharacters(in: .whitespaces).lowercased()
+                for prefix in ["https://", "http://", "www."] where r.hasPrefix(prefix) { r.removeFirst(prefix.count) }
+                return r
+            }
+            .filter { !$0.isEmpty }
+    }
+
+    var effectiveClaudeModel: String {
+        let m = claudeModel.trimmingCharacters(in: .whitespaces)
+        return m.isEmpty ? ClaudeClient.defaultModel : m
     }
 
     func isWorkday(_ date: Date) -> Bool {

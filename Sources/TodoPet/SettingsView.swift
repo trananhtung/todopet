@@ -1,3 +1,4 @@
+import AppKit
 import ServiceManagement
 import SwiftUI
 
@@ -7,6 +8,7 @@ struct SettingsView: View {
     @State private var token = ""
     @State private var busy = false
     @State private var message: String?
+    @State private var claudeKey = ""
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     private func hour(_ h: Int) -> String { String(format: "%02d:00", h) }
@@ -87,6 +89,79 @@ struct SettingsView: View {
                 TextField(L("Ứng dụng gây xao nhãng", "Distracting apps"), text: $prefs.distractionApps)
                 Text(L("Tên app cách nhau bởi dấu phẩy. Mở app này hơn 2 phút trong giờ làm, pet sẽ cáu.",
                        "Comma-separated app names. Using one for 2+ minutes during work hours makes the pet grumpy."))
+                    .font(.caption).foregroundColor(.secondary)
+                Toggle(L("Theo dõi trang web trong trình duyệt", "Watch websites in the browser"), isOn: $prefs.watchBrowsers)
+                TextField(L("Trang web gây xao nhãng", "Distracting websites"), text: $prefs.distractionSites)
+                    .disabled(!prefs.watchBrowsers)
+                Text(L("Tên miền cách nhau bởi dấu phẩy (gồm cả tên miền con), hoặc một phần địa chỉ như youtube.com/shorts. Hỗ trợ Safari, Chrome, Arc, Edge, Brave, Cốc Cốc… (không hỗ trợ Firefox). macOS sẽ hỏi quyền một lần cho mỗi trình duyệt; pet chỉ đọc địa chỉ tab đang mở, không lưu lại.",
+                       "Comma-separated domains (subdomains included), or part of an address like youtube.com/shorts. Works with Safari, Chrome, Arc, Edge, Brave… (not Firefox). macOS asks once per browser; the pet only reads the active tab's address and never stores it."))
+                    .font(.caption).foregroundColor(.secondary)
+                if !brain.browserDenied.isEmpty {
+                    HStack {
+                        Text(L("Chưa cấp quyền: ", "No access: ") + brain.browserDenied.joined(separator: ", "))
+                            .font(.caption).foregroundColor(.orange)
+                        Spacer()
+                        Button(L("Mở quyền Automation", "Open Automation settings")) {
+                            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                        Button(L("Thử lại", "Retry")) { brain.retryBrowsers() }
+                    }
+                }
+            }
+
+            Section(L("Lịch", "Calendar")) {
+                Toggle(L("Đọc Lịch của macOS (gồm tài khoản Google, Outlook đã thêm vào Lịch)", "Read the macOS Calendar (incl. Google/Outlook accounts added to it)"),
+                       isOn: $prefs.useCalendar)
+                    .onChange(of: prefs.useCalendar) { _, on in
+                        if on, brain.calendarAccess == .notDetermined { brain.requestCalendarAccess() }
+                    }
+                if prefs.useCalendar {
+                    HStack {
+                        switch brain.calendarAccess {
+                        case .granted: Label(L("Đã có quyền", "Access granted"), systemImage: "checkmark.seal.fill").foregroundColor(.green)
+                        case .notDetermined:
+                            Text(L("Chưa cấp quyền", "Not granted yet")).foregroundColor(.secondary)
+                            Spacer()
+                            Button(L("Cho phép", "Allow")) { brain.requestCalendarAccess() }
+                        case .denied:
+                            Text(L("Bị từ chối", "Denied")).foregroundColor(.orange)
+                            Spacer()
+                            Button(L("Mở cài đặt", "Open settings")) { CalendarWatcher.openPrivacySettings() }
+                        }
+                    }
+                    Toggle(L("Ngày nhiều họp thì giảm số việc cần làm", "Lower the daily target on meeting-heavy days"), isOn: $prefs.adaptTarget)
+                    Stepper(L("Nhắc trước giờ họp \(prefs.meetingLead) phút", "Remind \(prefs.meetingLead) min before meetings"),
+                            value: $prefs.meetingLead, in: 1...30)
+                    Text(L("Khi đang họp pet im lặng và không tính là bạn lười. Cứ 2 giờ trống ≈ 1 việc quan trọng.",
+                           "During meetings the pet stays quiet and doesn't count it as slacking. About 1 important task per 2 free hours."))
+                        .font(.caption).foregroundColor(.secondary)
+                }
+            }
+
+            Section(L("Việc bị dời mãi", "Postponed tasks")) {
+                Stepper(L("Coi là “bị dời mãi” sau \(prefs.stuckDays) ngày", "Flag a task after \(prefs.stuckDays) days on your list"),
+                        value: $prefs.stuckDays, in: 2...10)
+                if brain.hasClaudeKey {
+                    HStack {
+                        Label(L("Đã có API key Claude", "Claude API key saved"), systemImage: "sparkles").foregroundColor(.green)
+                        Spacer()
+                        Button(L("Xoá key", "Remove key"), role: .destructive) { brain.setClaudeKey(nil) }
+                    }
+                }
+                SecureField(L("API key Claude (tuỳ chọn, để gợi ý cách chia nhỏ)", "Claude API key (optional, for split suggestions)"), text: $claudeKey)
+                HStack {
+                    Button(L("Lưu key", "Save key")) {
+                        brain.setClaudeKey(claudeKey)
+                        claudeKey = ""
+                    }
+                    .disabled(claudeKey.isEmpty)
+                    Link(L("Lấy API key ↗", "Get an API key ↗"), destination: URL(string: "https://console.anthropic.com/settings/keys")!)
+                }
+                TextField(L("Model Claude", "Claude model"), text: $prefs.claudeModel)
+                Text(L("Key lưu trong Keychain. Khi bạn bấm “Nhờ Claude gợi ý”, tên và ghi chú của việc được gửi tới Claude API (tính phí theo lượt dùng, khoảng 1–2 xu Mỹ mỗi lần).",
+                       "The key lives in your Keychain. When you press “Ask Claude”, the task's title and notes are sent to the Claude API (billed per use, roughly 1–2 US cents each time)."))
                     .font(.caption).foregroundColor(.secondary)
             }
 

@@ -29,6 +29,9 @@ fi
 
 sed "s/__VERSION__/$VERSION/g" Resources/Info.plist > "$APP/Contents/Info.plist"
 [[ -f Resources/AppIcon.icns ]] && cp Resources/AppIcon.icns "$APP/Contents/Resources/"
+for lproj in Resources/*.lproj; do
+  if [[ -d "$lproj" ]]; then cp -R "$lproj" "$APP/Contents/Resources/"; fi
+done
 
 codesign --force --sign - --identifier com.todopet.mochi "$APP" >/dev/null
 echo "Built $APP"
