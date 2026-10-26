@@ -56,7 +56,7 @@ if [[ -f "$SIGN_KC" && -f "$SIGN_DIR/keychain-password" ]]; then
   restore_keychains
   trap - EXIT
 else
-  echo "Note: run scripts/setup-signing.sh once to stop permission prompts after each rebuild."
+  echo "Note: run scripts/setup-signing.sh once so Calendar and browser permissions survive rebuilds."
 fi
 if [[ $signed == 0 ]]; then
   codesign --force --sign - --identifier com.todopet.mochi "$APP" 2>/dev/null

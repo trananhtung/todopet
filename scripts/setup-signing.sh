@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # One-time setup: creates a self-signed code-signing certificate for TodoPet in its own keychain.
-# With it every build carries the same signature, so macOS remembers the Keychain, Calendar and
-# browser permissions you granted instead of asking again after each update.
+# With it every build carries the same signature, so macOS keeps the Calendar and browser (Automation)
+# permissions you granted across updates. (The Keychain still asks after code changes: without an
+# Apple Developer ID it ties "Always Allow" to the exact build.)
 # Nothing here touches your login keychain; delete the folder below to undo.
 set -euo pipefail
 

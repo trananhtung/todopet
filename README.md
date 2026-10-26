@@ -58,7 +58,7 @@ open /Applications/TodoPet.app
 
 `UNIVERSAL=1 scripts/build.sh` builds for both Apple silicon and Intel.
 
-**Recommended if you rebuild often:** give your builds a stable signature, so macOS remembers the Keychain, Calendar and browser permissions instead of asking again after every update:
+**Recommended if you rebuild often:** give your builds a stable signature. macOS ties the Calendar and browser (Automation) permissions to the signature, so they don't have to be granted again after every update. The Keychain is different: for apps without an Apple Developer ID it ties "Always Allow" to the exact build, so it still asks once after each update that changes the code.
 
 ```bash
 scripts/setup-signing.sh   # creates a "TodoPet Local Signing" certificate in its own keychain
@@ -83,7 +83,7 @@ The token is stored in your macOS **Keychain** and is only ever sent to `api.tod
 | Calendar | Meetings, free time, time-block suggestions | The board offers an **Allow** button; everything else works |
 | "TodoPet wants to control Safari / Chrome…" (once per browser) | Reading the active tab's address for distracting sites | Website detection is off for that browser; app detection still works |
 
-With an ad-hoc signature macOS asks again after every rebuild; with the local signing certificate (see Install) it asks only once.
+With an ad-hoc signature macOS asks for Calendar and browser access again after every rebuild; with the local signing certificate (see Install) it keeps them. The Keychain asks again whenever the app's code changes; only an Apple Developer ID signature avoids that.
 
 ### Splitting tasks with Claude (optional)
 

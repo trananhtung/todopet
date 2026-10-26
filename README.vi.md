@@ -58,7 +58,7 @@ open /Applications/TodoPet.app
 
 `UNIVERSAL=1 scripts/build.sh` build cho cả chip Apple và Intel.
 
-**Nên làm nếu bạn hay build lại:** cho các bản build một chữ ký cố định, để macOS nhớ các quyền Keychain, Lịch, trình duyệt và không hỏi lại sau mỗi lần cập nhật:
+**Nên làm nếu bạn hay build lại:** cho các bản build một chữ ký cố định. macOS gắn quyền Lịch và quyền điều khiển trình duyệt vào chữ ký, nên không phải cấp lại sau mỗi lần cập nhật. Keychain thì khác: với app không có Apple Developer ID, "Luôn cho phép" bị gắn vào đúng bản build, nên mỗi lần cập nhật có thay đổi code Keychain vẫn hỏi lại một lần.
 
 ```bash
 scripts/setup-signing.sh   # tạo chứng chỉ "TodoPet Local Signing" trong một keychain riêng
@@ -83,7 +83,7 @@ Token được lưu trong **Keychain** của macOS và chỉ được gửi tớ
 | Lịch | Giờ họp, giờ trống, gợi ý khung giờ | Bảng việc hiện nút **Cho phép**; các tính năng khác vẫn chạy |
 | "TodoPet muốn điều khiển Safari / Chrome…" (mỗi trình duyệt một lần) | Đọc địa chỉ tab đang mở để bắt trang gây xao nhãng | Tắt phát hiện trang web cho trình duyệt đó; phát hiện app vẫn chạy |
 
-Với chữ ký ad-hoc, macOS hỏi lại sau mỗi lần build; với chứng chỉ ký riêng (xem phần Cài đặt) chỉ hỏi một lần.
+Với chữ ký ad-hoc, macOS hỏi lại quyền Lịch và trình duyệt sau mỗi lần build; với chứng chỉ ký riêng (xem phần Cài đặt) thì giữ nguyên. Keychain vẫn hỏi lại mỗi khi code của app thay đổi; chỉ chữ ký Apple Developer ID mới tránh được.
 
 ### Chia nhỏ việc bằng Claude (tuỳ chọn)
 
