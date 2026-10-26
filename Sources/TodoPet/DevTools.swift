@@ -203,6 +203,9 @@ enum DevTools {
                 saveView(BreakdownView(task: stuck.task, brain: brain, state: BoardState(), steps: steps)
                     .frame(width: 370).background(Color(nsColor: .windowBackgroundColor)), .aqua,
                          url.appendingPathComponent("split.png"))
+                saveView(TaskRow(task: stuck.task, brain: brain, state: BoardState(), overdue: true, confirming: true)
+                    .padding(14).frame(width: 370).background(Color(nsColor: .windowBackgroundColor)), .aqua,
+                         url.appendingPathComponent("delete-confirm.png"))
             }
             defaults.removePersistentDomain(forName: suite)
             print("Snapshots written to \(url.path)")

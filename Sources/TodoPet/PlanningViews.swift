@@ -103,6 +103,7 @@ struct BreakdownView: View {
     @State private var firstToday = true
     @State private var asking = false
     @State private var saving = false
+    @State private var confirmDelete = false
     @State private var error: String?
 
     init(task: TodoTask, brain: Brain, state: BoardState, steps: [String] = ["", "", ""]) {
@@ -174,12 +175,31 @@ struct BreakdownView: View {
             if let error {
                 Text("⚠️ " + error).font(.caption).foregroundColor(.red).fixedSize(horizontal: false, vertical: true)
             }
+            if confirmDelete {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(Lines.confirmDelete(task)).font(.caption).foregroundColor(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    Button(L("Huỷ", "Cancel")) { confirmDelete = false }
+                    Button(L("Xoá", "Delete")) {
+                        brain.delete(task)
+                        state.breakdown = nil
+                    }
+                    .foregroundColor(.red)
+                }
+                .buttonStyle(.borderless)
+                .padding(8)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.red.opacity(0.07)))
+            }
             HStack {
                 Button(L("Bỏ khỏi kế hoạch", "Drop from plan")) {
                     brain.unplan(task)
                     state.breakdown = nil
                 }
                 .help(L("Bỏ hạn của việc (vẫn giữ trong Todoist)", "Removes the due date (the task stays in Todoist)"))
+                Button { confirmDelete = true } label: { Image(systemName: "trash") }
+                    .foregroundColor(.red)
+                    .help(L("Xoá việc", "Delete task"))
                 Spacer()
                 Button {
                     save()

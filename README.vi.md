@@ -16,7 +16,7 @@ Một chú pet nhỏ cho macOS, đi dạo trên thanh Dock, đọc công việc 
 - **Hỏi "Hôm nay làm gì?".** Nếu hôm nay chưa có đủ **3 việc** (chỉnh được), pet sẽ nhắc bạn lên kế hoạch: buổi sáng hỏi nhẹ nhàng, qua giờ hạn chót thì nhắc gắt dần.
 - **Nhắc đúng việc cần làm.** Pet chọn việc tiếp theo theo kiểu "ăn con ếch trước" (ưu tiên cao nhất, rồi giờ sớm nhất), nhắc mỗi 45 phút, và báo trước 10 phút với việc có giờ cụ thể.
 - **Có tâm trạng thật.** Pet ăn mừng mỗi việc bạn xong (kể cả việc tích trong app Todoist), và nhăn nhó, rồi nổi cáu, khi có việc quá hạn, nhiều giờ không tiến triển, hoặc bạn ngồi lâu trong app gây xao nhãng. Lúc cáu nó còn hầm hầm đi về phía con trỏ chuột 😤
-- **Làm việc với Todoist ngay trên pet.** Bấm vào pet để xem việc hôm nay, tích hoàn thành, thêm việc mới (Hôm nay / Ngày mai / Không hạn, độ ưu tiên, hoặc cú pháp quick-add của Todoist như `Gọi Lan 3pm p1 #Work`), dời việc sang hôm nay hoặc ngày mai, và xem chuỗi ngày (streak) trên Todoist.
+- **Làm việc với Todoist ngay trên pet.** Bấm vào pet để xem việc hôm nay, tích hoàn thành, thêm việc mới (Hôm nay / Ngày mai / Không hạn, độ ưu tiên, hoặc cú pháp quick-add của Todoist như `Gọi Lan 3pm p1 #Work`), dời việc sang hôm nay hoặc ngày mai, xoá việc (có bước xác nhận, vì Todoist không khôi phục được), và xem chuỗi ngày (streak) trên Todoist.
 - **Có hẹn giờ tập trung.** Bắt đầu phiên 25 phút cho một việc, pet đeo băng đô rồi ngồi im trong góc. Hết giờ, pet hỏi bạn xong chưa; nếu xong, pet tự đánh dấu hoàn thành trên Todoist và bắt đầu giờ nghỉ.
 - **Tổng kết cuối ngày.** 30 phút trước giờ tan làm, pet cho bạn xem đã xong bao nhiêu việc và đề nghị dời phần còn lại sang mai.
 - **Bắt quả tang trang web gây xao nhãng.** Pet đọc tab đang mở trong Safari, Chrome, Arc, Edge, Brave, Cốc Cốc và các trình duyệt Chromium khác. Ngồi YouTube hay Facebook quá 2 phút trong giờ làm là pet bắt đầu nhăn nhó. Bạn tự chọn danh sách trang; quy tắc như `youtube.com/shorts` chỉ bắt đúng một phần của trang.
@@ -74,6 +74,7 @@ TodoPet nói chuyện trực tiếp với Todoist bằng API token. Nếu bạn 
 | Thao tác | Kết quả |
 |---|---|
 | Bấm vào pet | Mở bảng việc |
+| Rê chuột vào một việc trên bảng | ▶︎ tập trung · ✂️ chia nhỏ · → dời · 🗑 xoá (hỏi lại trước khi xoá; việc con và cả chuỗi lặp lại cũng bị xoá, không hoàn tác được) |
 | Kéo pet | Di chuyển; thả ra pet rơi xuống Dock |
 | Rê chuột vào | Pet đứng lại và đỏ mặt |
 | Chuột phải / biểu tượng trên thanh menu | Menu nhanh: thêm việc, tập trung, ẩn 1 giờ, im lặng 1 giờ, cài đặt |

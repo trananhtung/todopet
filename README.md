@@ -16,7 +16,7 @@ English · <a href="README.vi.md">Tiếng Việt</a>
 - **Asks "what are we doing today?"** If today has fewer than **3 tasks** (configurable), it asks you to plan, gently in the morning and more insistently once the planning deadline passes.
 - **Reminds you of the right task.** It picks the next task with "eat the frog" ordering (highest priority, then earliest time), nudges you every 45 minutes, and pings you 10 minutes before timed tasks.
 - **Has real moods.** It celebrates every completed task (including ones you tick off in the Todoist app), and gets annoyed, then grumpy, when tasks are overdue, nothing moves for hours, or you sit in a distracting app. When grumpy it marches toward your cursor 😤
-- **Lets you work with Todoist from the pet.** Click the pet to see today's tasks, complete them, add new ones (Today / Tomorrow / No date, priority, or full Todoist quick-add syntax like `Call Anna 3pm p1 #Work`), move tasks to today or tomorrow, and see your Todoist streak.
+- **Lets you work with Todoist from the pet.** Click the pet to see today's tasks, complete them, add new ones (Today / Tomorrow / No date, priority, or full Todoist quick-add syntax like `Call Anna 3pm p1 #Work`), move tasks to today or tomorrow, delete tasks (after a confirmation, since Todoist can't restore them), and see your Todoist streak.
 - **Has a built-in focus timer.** Start a 25-minute session on a task and the pet puts on a headband and sits quietly in a corner. When time's up it asks if you finished; if you did, it completes the task in Todoist and starts your break.
 - **Runs an end-of-day review.** 30 minutes before work ends it shows what you finished and offers to move the rest to tomorrow.
 - **Catches distracting websites.** It reads the active tab in Safari, Chrome, Arc, Edge, Brave and other Chromium browsers. Two minutes on YouTube or Facebook during work hours and the pet starts frowning. You choose the sites, and rules like `youtube.com/shorts` match only part of a site.
@@ -74,6 +74,7 @@ TodoPet talks to Todoist directly with your API token. If you also want to manag
 | Action | What happens |
 |---|---|
 | Click the pet | Opens the task board |
+| Hover a task on the board | ▶︎ focus · ✂️ split · → move · 🗑 delete (asks first; sub-tasks and recurring series go too, and it can't be undone) |
 | Drag the pet | Moves it; let go and it drops back to the Dock |
 | Hover | It stops walking and blushes |
 | Right-click / menu bar icon | Quick menu: add task, focus, hide for 1 hour, quiet for 1 hour, settings |

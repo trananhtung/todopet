@@ -31,6 +31,8 @@ protocol TodoService: AnyObject {
     func close(id: String) async throws
     func reopen(id: String) async throws
     func reschedule(id: String, dueString: String) async throws
+    /// Permanent: Todoist deletes the task and its sub-tasks, and the API can't restore them.
+    func delete(id: String) async throws
 }
 
 // MARK: - Real client (Todoist API v1, https://developer.todoist.com/api/v1/)
@@ -146,6 +148,10 @@ final class TodoistClient: TodoService {
     func reschedule(id: String, dueString: String) async throws {
         try await send("POST", "tasks/\(id)", body: ["due_string": dueString, "due_lang": "en"])
     }
+
+    func delete(id: String) async throws {
+        try await send("DELETE", "tasks/\(id)")
+    }
 }
 
 // MARK: - Demo service (no account needed): `TodoPet --demo`
@@ -229,5 +235,10 @@ final class DemoService: TodoService {
         } else {
             active[i].due = TodoDue(date: DayMath.key(now), string: dueString)
         }
+    }
+
+    func delete(id: String) async throws {
+        await pause()
+        active.removeAll { $0.id == id || $0.parentId == id }
     }
 }

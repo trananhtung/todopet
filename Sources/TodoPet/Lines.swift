@@ -194,6 +194,17 @@ enum Lines {
           "Split into \(count) steps ✂️ Start with “\(TextClean.short(first))” — just 15–30 minutes!")
     }
 
+    static func deleted(_ t: TodoTask) -> String {
+        L("Đã xoá \(q(t)) 🗑 Danh sách gọn hơn rồi!", "Deleted \(q(t)) 🗑 One less thing on your list!")
+    }
+
+    /// Confirmation text shown before deleting; warns that sub-tasks and recurring series go too.
+    static func confirmDelete(_ t: TodoTask) -> String {
+        var s = L("Xoá hẳn khỏi Todoist (kèm việc con nếu có)", "Delete from Todoist for good (with any sub-tasks)")
+        if t.isRecurring { s += L(", cả chuỗi lặp lại", ", including the whole recurring series") }
+        return s + L("? Không khôi phục được.", "? This can't be undone.")
+    }
+
     static func unplanned(_ t: TodoTask) -> String {
         L("Đã bỏ \(q(t)) khỏi kế hoạch (vẫn còn trong Todoist, không hạn). Nhẹ đầu hơn chưa? 🙂",
           "Took \(q(t)) off the plan (still in Todoist, no date). Feels lighter? 🙂")

@@ -758,6 +758,27 @@ final class Brain: ObservableObject {
     }
 
     /// Takes a task off today's plan without deleting it (it stays in Todoist with no date).
+    /// Deletes a task (and its sub-tasks) from Todoist for good. The UI asks for confirmation first.
+    func delete(_ task: TodoTask) {
+        guard let service else { return }
+        active.removeAll { $0.id == task.id || $0.parentId == task.id }
+        if focus?.task?.id == task.id, focus?.isBreak == false { focus = nil }
+        lastPlanAction = Date()
+        recompute()
+        Task {
+            do {
+                try await service.delete(id: task.id)
+            } catch {
+                errorText = error.localizedDescription
+                say(Bubble(text: Lines.error(error.localizedDescription), seconds: 10, urgent: true))
+                await refresh()
+                return
+            }
+            say(Bubble(text: Lines.deleted(task), seconds: 5, urgent: true))
+            await refresh()
+        }
+    }
+
     func unplan(_ task: TodoTask) {
         guard let service else { return }
         lastPlanAction = Date()

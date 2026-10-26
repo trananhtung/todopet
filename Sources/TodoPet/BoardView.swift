@@ -244,10 +244,49 @@ struct TaskRow: View {
     @ObservedObject var state: BoardState
     let overdue: Bool
     @State private var hover = false
+    @State private var confirmDelete: Bool
+
+    /// `confirming` starts the row in its delete-confirmation state (used for snapshots).
+    init(task: TodoTask, brain: Brain, state: BoardState, overdue: Bool, confirming: Bool = false) {
+        self.task = task
+        self.brain = brain
+        self.state = state
+        self.overdue = overdue
+        _confirmDelete = State(initialValue: confirming)
+    }
 
     private var stuckDays: Int? { brain.stuck.first { $0.task.id == task.id }?.days }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            row
+            if confirmDelete {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(Lines.confirmDelete(task))
+                        .font(.caption).foregroundColor(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 4)
+                    Button(L("Huỷ", "Cancel")) { confirmDelete = false }
+                    Button(L("Xoá", "Delete")) {
+                        confirmDelete = false
+                        brain.delete(task)
+                    }
+                    .foregroundColor(.red)
+                }
+                .buttonStyle(.borderless)
+                .padding(.leading, 24)
+            }
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 4)
+        .background(RoundedRectangle(cornerRadius: 6).fill(confirmDelete ? Color.red.opacity(0.07) : (hover ? Color.primary.opacity(0.05) : .clear)))
+        .onHover { inside in
+            hover = inside
+            if !inside { confirmDelete = false }
+        }
+    }
+
+    private var row: some View {
         HStack(alignment: .top, spacing: 8) {
             Button { brain.complete(task) } label: {
                 Image(systemName: hover ? "checkmark.circle" : "circle")
@@ -288,12 +327,12 @@ struct TaskRow: View {
                     .buttonStyle(.borderless)
                     .help(overdue ? L("Dời vào hôm nay", "Move to today") : L("Dời sang mai", "Move to tomorrow"))
                 }
+                Button { confirmDelete = true } label: { Image(systemName: "trash") }
+                    .buttonStyle(.borderless)
+                    .foregroundColor(.red.opacity(0.8))
+                    .help(L("Xoá việc", "Delete task"))
             }
         }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 4)
-        .background(RoundedRectangle(cornerRadius: 6).fill(hover ? Color.primary.opacity(0.05) : .clear))
-        .onHover { hover = $0 }
     }
 }
 
