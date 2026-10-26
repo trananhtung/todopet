@@ -64,6 +64,12 @@ final class Brain: ObservableObject {
     @Published private(set) var stuck: [StuckTask] = []
     @Published private(set) var browserDenied: [String] = []
     @Published private(set) var hasClaudeKey = false
+    /// The dance and treat after the last finished task (drawn for a few seconds).
+    @Published private(set) var celebration: CelebrationEvent?
+    /// Current mischief, performed by the pet window.
+    @Published private(set) var antic: AnticEvent?
+    /// Hunger, dirt, growth, accessories: what the pet remembers across days.
+    let life: PetLife
 
     /// Set by the app: open the task board (optionally focusing the "add task" field), the split view, and settings.
     var openBoard: ((_ focusAdd: Bool) -> Void)?
@@ -88,12 +94,16 @@ final class Brain: ObservableObject {
     private var awaySince: Date?
     private var frontApp: (name: String, bundle: String, since: Date)?
     private var distractionSnoozedUntil = Date.distantPast
+    private var anticSnoozedUntil = Date.distantPast
+    private var annoyedSince: Date?
+    private var angrySince: Date?
     private var lastStatsAt = Date.distantPast
     private var timer: Timer?
     private var cancellables = Set<AnyCancellable>()
 
     init(prefs: Prefs, demo: Bool) {
         self.prefs = prefs
+        life = demo ? PetLife(persist: false, initial: .demo) : PetLife()
         if demo {
             useDemo()
             return
@@ -147,6 +157,15 @@ final class Brain: ObservableObject {
             MainActor.assumeIsolated { self?.tick() }
         }
         recompute()
+        // Dev hook: `TODOPET_ANTIC=parade|block TodoPet --demo` plays the mischief right away.
+        if isDemo, let kind = ProcessInfo.processInfo.environment["TODOPET_ANTIC"] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.antic = AnticEvent(kind: kind == "block" ? .block : .parade(self.day.next?.title ?? "Demo"), start: Date())
+                }
+            }
+        }
         if hasToken {
             refreshSoon()
         } else {
@@ -258,11 +277,12 @@ final class Brain: ObservableObject {
             let today = DayMath.key(Date())
             completed = completed.filter { $0.completedDate.map(DayMath.key) == today }
         }
-        // Celebrate tasks you completed in the Todoist app since the last sync.
+        // Celebrate (and feed the pet for) tasks you completed in the Todoist app since the last sync.
         let ids = Set(completed.map(\.id))
-        if didLoadOnce, let fresh = completed.first(where: { !knownCompleted.contains($0.id) && !completedViaPet.contains($0.id) }) {
+        let fresh = completed.filter { !knownCompleted.contains($0.id) && !completedViaPet.contains($0.id) }
+        if didLoadOnce, let first = fresh.first {
             recompute()
-            celebrate(fresh, viaPet: false)
+            celebrate(first, viaPet: false, feeds: fresh.count)
         }
         knownCompleted = ids.union(completedViaPet)
         didLoadOnce = true
@@ -331,7 +351,11 @@ final class Brain: ObservableObject {
     }
 
     private var distraction: (app: String, minutes: Double)? {
-        guard Date() > distractionSnoozedUntil else { return nil }
+        Date() > distractionSnoozedUntil ? currentDistraction : nil
+    }
+
+    /// The distracting app or site in front right now, even while the pet was asked to let it go.
+    private var currentDistraction: (app: String, minutes: Double)? {
         if prefs.watchBrowsers, let v = browser.visit,
            BrowserWatcher.match(host: v.host, url: v.url, rules: prefs.siteRules) != nil {
             return (v.host, Date().timeIntervalSince(v.since) / 60)
@@ -358,6 +382,13 @@ final class Brain: ObservableObject {
         if suggestions != newSuggestions { suggestions = newSuggestions }
         let newStuck = tracker.stuck(day.open, minDays: prefs.stuckDays, now: now)
         if stuck != newStuck { stuck = newStuck }
+        settleLife(now)
+        if hasToken && didLoadOnce {
+            let s = life.state, done = day.completed.count, planned = day.planned, goal = target, workday = ctx.workday
+            if s.dayCompleted != done || s.dayPlanned != planned || s.dayTarget != goal || s.dayWorkday != workday {
+                life.mutate { LifeRules.syncDay(&$0, completed: done, planned: planned, target: goal, workday: workday) }
+            }
+        }
 
         var i = MoodInputs()
         i.hasToken = hasToken
@@ -379,10 +410,43 @@ final class Brain: ObservableObject {
         i.idleMinutes = Brain.idleSeconds() / 60
         i.focusing = focus.map { !$0.isBreak } ?? false
         i.celebratingNow = now < celebrateUntil
+        i.satiety = life.state.satiety
+        i.dirt = life.state.dirt
         let r = MoodEngine.evaluate(i)
         score = r.score
         reasons = r.reasons
         if mood != r.mood { mood = r.mood }
+        if mood == .angry { angrySince = angrySince ?? now } else { angrySince = nil }
+        if mood == .annoyed || mood == .angry { annoyedSince = annoyedSince ?? now } else { annoyedSince = nil }
+    }
+
+    /// Settles a finished day (streak, perfect-day sticker, dirt) once the date has changed, even after a restart.
+    private func settleLife(_ now: Date) {
+        let today = DayMath.key(now)
+        guard life.state.dayKey != today else { return }
+        let unlocked = life.mutate { s in
+            LifeRules.closeDay(&s, today: today) { [prefs] key in DateParse.parse(key).map(prefs.isWorkday) ?? false }
+        }
+        if !unlocked.isEmpty {
+            say(Bubble(text: Lines.unlocked(unlocked), seconds: 12, urgent: true))
+        }
+    }
+
+    private func speak(_ text: String) {
+        if prefs.voiceOn { Voice.shared.say(text) }
+    }
+
+    func endAntic() {
+        antic = nil
+    }
+
+    private func spareAction() -> BubbleAction {
+        BubbleAction(title: L("Tha cho tôi 15'", "Spare me 15'")) { [weak self] in
+            let until = Date().addingTimeInterval(15 * 60)
+            self?.anticSnoozedUntil = until
+            self?.distractionSnoozedUntil = until
+            self?.antic = nil
+        }
     }
 
     static func idleSeconds() -> Double {
@@ -428,6 +492,15 @@ final class Brain: ObservableObject {
         if let f = focus, now >= f.end { finishFocus() }
         if hasToken, !loading, lastSync.map({ now.timeIntervalSince($0) > 180 }) ?? true { refreshSoon() }
         refreshCalendar()
+        // Hunger grows during work hours (not during meetings or while you're away).
+        let ctx = context(now)
+        let working = hasToken && ctx.inWork && CalendarMath.current(events, at: now) == nil && Brain.idleSeconds() < 300
+        life.mutate { LifeRules.decay(&$0, now: now, working: working) }
+        if hasToken, ctx.inWork, let d = currentDistraction {
+            life.mutate { LifeRules.addDistraction(&$0, label: d.app, seconds: 15) }
+        }
+        // Left the distracting app or site: the pet gets out of the way.
+        if case .block? = antic?.kind, currentDistraction == nil { antic = nil }
         recompute()
         runRules(now)
     }
@@ -529,6 +602,8 @@ final class Brain: ObservableObject {
                 text += "\n" + Lines.calendarDay(meetings: events.count, busyMinutes: end.timeIntervalSince(start) / 60 - free,
                                                  freeMinutes: free, target: target, reduced: target < prefs.dailyTarget)
             }
+            if life.state.dirt > 0 { text += "\n" + Lines.dirty(life.state.dirt) }
+            if life.state.streak > 0 { text += "\n" + Lines.streak(life.state.streak) }
             say(Bubble(text: text,
                        actions: needsPlan ? planActions() : (day.next.map { [focusAction($0), laterAction()] } ?? []),
                        seconds: 60))
@@ -541,7 +616,15 @@ final class Brain: ObservableObject {
             return
         }
 
-        // 5. Distraction apps.
+        // 5. Distraction apps and sites. Grumpy and stuck on one for 5+ minutes: the pet jumps in the way.
+        if prefs.antics, ctx.inWork, mood == .angry, now > anticSnoozedUntil, day.open.count > 0, let d = distraction,
+           d.minutes >= 5, every("antic", minutes: 20) {
+            antic = AnticEvent(kind: .block, start: now)
+            say(Bubble(text: Lines.block(app: d.app, next: day.next), actions: [focusAction(day.next), spareAction()],
+                       seconds: 25, urgent: true))
+            speak(Lines.voiceBlock(app: d.app))
+            return
+        }
         if ctx.inWork, day.open.count > 0, let d = distraction, d.minutes >= 2, every("distract", minutes: 10) {
             say(Bubble(text: Lines.distraction(mood: mood, app: d.app, left: day.open.count, next: day.next), actions: [
                 focusAction(day.next),
@@ -561,6 +644,31 @@ final class Brain: ObservableObject {
                 laterAction(),
             ], seconds: 60))
             return
+        }
+
+        // 6b. A hungry pet begs for a finished task.
+        if ctx.inWork, life.state.hungry, every("hungry", minutes: 60) {
+            say(Bubble(text: Lines.hungry(life.state.satiety, next: day.next),
+                       actions: day.next.map { [focusAction($0), laterAction()] } ?? [], seconds: 30))
+            speak(Lines.voiceHungry())
+            return
+        }
+
+        // 6c. Mischief that escalates while you slack: grumbling, then a parade with the task on a sign.
+        if prefs.antics, ctx.inWork, now > anticSnoozedUntil, let next = day.next {
+            if let a = angrySince, now.timeIntervalSince(a) >= 10 * 60, every("antic", minutes: 20) {
+                antic = AnticEvent(kind: .parade(next.title), start: now)
+                say(Bubble(text: Lines.parade(next), actions: [focusAction(next), spareAction()], seconds: 25, urgent: true))
+                speak(Lines.voiceAngry(next))
+                return
+            }
+            if let a = annoyedSince, now.timeIntervalSince(a) >= 10 * 60, every("grumble", minutes: 30) {
+                antic = AnticEvent(kind: .grumble, start: now)
+                if prefs.soundOn { NSSound(named: "Basso")?.play() }
+                say(Bubble(text: Lines.grumble(next), actions: [focusAction(next), spareAction()], seconds: 15))
+                speak(Lines.voiceGrumble())
+                return
+            }
         }
 
         // 7. Overdue tasks.
@@ -588,6 +696,13 @@ final class Brain: ObservableObject {
                 BubbleAction(title: L("Dời sang mai", "Move to tomorrow"), primary: true) { [weak self] in self?.moveTodayToTomorrow() },
                 BubbleAction(title: L("Làm tiếp", "Keep going")) {},
             ], seconds: 90))
+            return
+        }
+
+        // 9b. A sulky end-of-day report on time spent in distracting apps and sites.
+        if ctx.inWork, now >= ctx.reviewTime, life.state.distractionTotal >= 10 * 60, once("distractsum-\(dayKey)") {
+            say(Bubble(text: Lines.distractionSummary(life.state.distraction), seconds: 25))
+            speak(Lines.voiceSummary(minutes: Int(life.state.distractionTotal / 60)))
             return
         }
 
@@ -625,20 +740,40 @@ final class Brain: ObservableObject {
 
     // MARK: - Actions
 
-    private func celebrate(_ task: TodoTask?, viaPet: Bool) {
+    /// Feeds the pet once per finished task, then dances with a random (sometimes rare golden) celebration.
+    private func celebrate(_ task: TodoTask?, viaPet: Bool, feeds: Int = 1) {
         let now = Date()
         lastCelebration = now
-        celebrateUntil = now.addingTimeInterval(4)
+        antic = nil
+        var result: FeedResult?
+        var unlocked: [Accessory] = []
+        var levelUp: Stage?
+        for _ in 0..<max(1, feeds) {
+            let r = life.mutate { LifeRules.feed(&$0, now: now, roll: .random(in: 0..<1), pick: .random(in: 0..<1)) }
+            unlocked += r.unlocked
+            levelUp = r.levelUp ?? levelUp
+            result = r
+        }
+        guard let r = result else { return }
+        celebration = CelebrationEvent(kind: r.kind, food: r.food, golden: r.golden, combo: r.combo, start: now)
+        celebrateUntil = now.addingTimeInterval(r.golden || levelUp != nil ? 5 : 4)
         recompute()
-        if prefs.soundOn { NSSound(named: "Glass")?.play() }
+        if prefs.soundOn { NSSound(named: r.golden || levelUp != nil ? "Hero" : "Glass")?.play() }
         var actions: [BubbleAction] = []
         if viaPet, let task {
             actions.append(BubbleAction(title: L("Hoàn tác", "Undo")) { [weak self] in self?.undoComplete(task) })
         }
         if let task {
-            bubble = Bubble(text: Lines.done(task, completed: day.completed.count, target: target),
-                            actions: actions, seconds: 8, urgent: true)
+            var lines = [Lines.done(task, completed: day.completed.count, target: target)]
+            if r.golden { lines.append(Lines.golden()) }
+            if r.combo >= 2 { lines.append(Lines.combo(r.combo)) }
+            if r.cleaned { lines.append(Lines.cleaned(life.state.dirt)) }
+            if let levelUp { lines.append(Lines.levelUp(levelUp)) }
+            if !unlocked.isEmpty { lines.append(Lines.unlocked(unlocked)) }
+            bubble = Bubble(text: lines.joined(separator: "\n"), actions: actions, seconds: unlocked.isEmpty && levelUp == nil ? 8 : 14,
+                            urgent: true)
             lastBubbleAt = now
+            if levelUp != nil || r.golden { speak(Lines.voiceCheer()) }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 4.2) { [weak self] in
             MainActor.assumeIsolated { self?.recompute() }
@@ -663,6 +798,7 @@ final class Brain: ObservableObject {
                 errorText = error.localizedDescription
                 completed.removeAll { $0.id == task.id }
                 active.append(task)
+                life.mutate { LifeRules.unfeed(&$0) }
                 recompute()
                 say(Bubble(text: Lines.error(error.localizedDescription), seconds: 10, urgent: true))
             }
@@ -671,6 +807,7 @@ final class Brain: ObservableObject {
 
     func undoComplete(_ task: TodoTask) {
         guard let service else { return }
+        life.mutate { LifeRules.unfeed(&$0) }
         completed.removeAll { $0.id == task.id }
         var t = task
         t.checked = false

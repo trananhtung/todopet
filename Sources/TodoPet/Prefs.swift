@@ -37,6 +37,10 @@ final class Prefs: ObservableObject {
     /// After this many days on your list, a task counts as "keeps getting postponed".
     @Published var stuckDays: Int { didSet { d.set(stuckDays, forKey: "stuckDays") } }
     @Published var claudeModel: String { didSet { d.set(claudeModel, forKey: "claudeModel") } }
+    /// Escalating mischief when you slack off (grumbling, sign parade, standing in the way).
+    @Published var antics: Bool { didSet { d.set(antics, forKey: "antics") } }
+    /// Say some lines out loud with a macOS voice.
+    @Published var voiceOn: Bool { didSet { d.set(voiceOn, forKey: "voiceOn") } }
 
     /// First time the app ever ran; used so day one doesn't start with a grumpy pet.
     let firstLaunch: Date
@@ -55,6 +59,7 @@ final class Prefs: ObservableObject {
             "distractionSites": "youtube.com, facebook.com, tiktok.com, instagram.com, x.com, reddit.com, netflix.com",
             "useCalendar": true, "adaptTarget": true, "meetingLead": 5, "stuckDays": 3,
             "claudeModel": ClaudeClient.defaultModel,
+            "antics": true, "voiceOn": false,
         ])
         lang = Lang(rawValue: d.string(forKey: "lang") ?? "") ?? .systemDefault
         petName = d.string(forKey: "petName") ?? "Mochi"
@@ -79,6 +84,8 @@ final class Prefs: ObservableObject {
         meetingLead = d.integer(forKey: "meetingLead")
         stuckDays = d.integer(forKey: "stuckDays")
         claudeModel = d.string(forKey: "claudeModel") ?? ClaudeClient.defaultModel
+        antics = d.bool(forKey: "antics")
+        voiceOn = d.bool(forKey: "voiceOn")
         if let f = d.object(forKey: "firstLaunch") as? Date {
             firstLaunch = f
         } else {

@@ -5,6 +5,8 @@ final class BoardState: ObservableObject {
     @Published var focusAddToken = UUID()
     /// When set, the board shows the "split this task" view.
     @Published var breakdown: TodoTask?
+    /// Shows the wardrobe & achievements view.
+    @Published var wardrobe = false
 }
 
 enum PriorityStyle {
@@ -21,10 +23,13 @@ enum PriorityStyle {
 /// Little pet face used in the board header.
 struct MiniPet: View {
     let mood: Mood
+    var life: LifeState?
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 20)) { tl in
             Canvas { ctx, size in
-                PetArt.draw(&ctx, size: size, pose: PetPose(mood: mood, t: tl.date.timeIntervalSinceReferenceDate))
+                var pose = PetPose(mood: mood, t: tl.date.timeIntervalSinceReferenceDate)
+                if let life { pose.decorate(life) }
+                PetArt.draw(&ctx, size: size, pose: pose)
             }
         }
         .frame(width: 54, height: 54)
@@ -36,13 +41,25 @@ struct BoardView: View {
     @ObservedObject var brain: Brain
     @ObservedObject var prefs: Prefs
     @ObservedObject var state: BoardState
+    @ObservedObject var life: PetLife
     var close: () -> Void = {}
+
+    init(brain: Brain, prefs: Prefs, state: BoardState, close: @escaping () -> Void = {}) {
+        self.brain = brain
+        self.prefs = prefs
+        self.state = state
+        self.life = brain.life
+        self.close = close
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
+            if brain.hasToken { LifeBar(life: life, state: state) }
             Divider()
-            if brain.hasToken, let task = state.breakdown {
+            if brain.hasToken, state.wardrobe {
+                WardrobeView(life: life, state: state, mood: brain.mood)
+            } else if brain.hasToken, let task = state.breakdown {
                 BreakdownView(task: task, brain: brain, state: state)
             } else if brain.hasToken {
                 content
@@ -58,7 +75,7 @@ struct BoardView: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: 10) {
-            MiniPet(mood: brain.mood)
+            MiniPet(mood: brain.mood, life: life.state)
             VStack(alignment: .leading, spacing: 3) {
                 Text("\(prefs.petName) \(brain.mood.label) \(brain.mood.emoji)")
                     .font(.system(size: 14, weight: .bold, design: .rounded))
@@ -486,6 +503,7 @@ final class BoardController: NSObject, NSPopoverDelegate {
     nonisolated func popoverDidClose(_ notification: Notification) {
         MainActor.assumeIsolated {
             state.breakdown = nil
+            state.wardrobe = false
             onShownChanged?(false)
         }
     }

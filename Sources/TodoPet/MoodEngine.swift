@@ -49,6 +49,8 @@ struct MoodInputs {
     var celebratingNow = false
     var inMeeting = false
     var stuck = 0
+    var satiety: Double = 70
+    var dirt = 0
 }
 
 struct MoodReason: Identifiable, Hashable {
@@ -82,6 +84,12 @@ enum MoodEngine {
         }
         if i.late > 0 {
             add(-Double(min(i.late, 3)) * 4, L("\(i.late) việc đã trễ giờ", "\(i.late) task(s) past their time"))
+        }
+        if i.satiety < 30 {
+            add(-(30 - i.satiety) / 2, L("đang đói (no \(Int(i.satiety))%)", "hungry (\(Int(i.satiety))% full)"))
+        }
+        if i.dirt > 0 {
+            add(-Double(i.dirt) * 5, L("bẩn vì \(i.dirt) ngày lười", "dirty after \(i.dirt) lazy day(s)"))
         }
         if i.stuck > 0 {
             add(-Double(min(i.stuck, 3)) * 3, L("\(i.stuck) việc bị dời mãi", "\(i.stuck) task(s) keep getting postponed"))

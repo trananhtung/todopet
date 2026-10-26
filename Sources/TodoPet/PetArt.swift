@@ -13,6 +13,29 @@ struct PetPose {
     var prevMood: Mood = .normal
     /// 0 → colors of `prevMood`, 1 → colors of `mood`.
     var blend: Double = 1
+
+    // Life: growth, hunger, dirt, accessories.
+    var stageScale: Double = 1
+    var sprouts = 0
+    var hungry = false
+    var dirt = 0
+    var wearing: [Accessory] = []
+
+    // Celebration after a finished task.
+    var celebration: CelebrationKind = .jump
+    var golden = false
+    var food: String?
+    /// Seconds since the food started falling.
+    var foodT: Double = 0
+
+    /// Applies the pet's long-term state (stage, hunger, dirt, accessories).
+    mutating func decorate(_ life: LifeState) {
+        stageScale = life.stage.scale
+        sprouts = life.stage.sprouts
+        hungry = life.hungry
+        dirt = life.dirt
+        wearing = life.wornAccessories
+    }
 }
 
 struct RGBA {
@@ -60,19 +83,42 @@ enum PetArt {
         ctx.translateBy(x: (size.width - 120 * s) / 2, y: (size.height - 120 * s) / 2)
         ctx.scaleBy(x: s, y: s)
 
+        // Growth stage: smaller when young, scaled around the point where the feet touch the ground.
+        let g = CGFloat(p.stageScale)
+        ctx.translateBy(x: 60, y: 113)
+        ctx.scaleBy(x: g, y: g)
+        ctx.translateBy(x: -60, y: -113)
+
         let t = p.t
         let k = max(0, min(1, p.blend))
-        let pal = PetPalette.of(p.prevMood).mix(PetPalette.of(p.mood), k * k * (3 - 2 * k))
+        var pal = PetPalette.of(p.prevMood).mix(PetPalette.of(p.mood), k * k * (3 - 2 * k))
         let mood = p.held ? Mood.normal : p.mood
+        let celebrating = mood == .celebrating
+        if celebrating && p.golden {
+            pal = PetPalette(top: RGBA(0xFFF6C2), bottom: RGBA(0xFFC531), line: RGBA(0x8A5A00), cheek: RGBA(0xFF7F9E, 0.55))
+        }
 
         // Body dynamics.
         var jump: CGFloat = 0, squash: CGFloat = 0, shakeX: CGFloat = 0, breathe: CGFloat = 0
+        var spinX: CGFloat = 1, flipAngle: Double = 0
         switch mood {
         case .celebrating:
             let ph = (t * 2.2).truncatingRemainder(dividingBy: 1)
             let h = CGFloat(sin(ph * .pi))
-            jump = h * 20
-            squash = (ph < 0.1 || ph > 0.9) ? 0.12 : -0.06 * h
+            switch p.celebration {
+            case .dance:
+                shakeX = CGFloat(sin(t * 8)) * 7
+                jump = abs(CGFloat(sin(t * 8))) * 4
+            case .flip:
+                jump = h * 26
+                if ph > 0.12 && ph < 0.88 { flipAngle = (ph - 0.12) / 0.76 * 2 * .pi }
+            case .spin:
+                jump = h * 14
+                spinX = CGFloat(cos(t * 9))
+            default:
+                jump = h * 20
+            }
+            if p.celebration != .dance { squash = (ph < 0.1 || ph > 0.9) ? 0.12 : -0.06 * h }
         case .happy:
             if p.walking {
                 jump = abs(CGFloat(sin(p.walkPhase))) * 5
@@ -107,7 +153,7 @@ enum PetArt {
 
         let cx: CGFloat = 60 + shakeX
         let ground: CGFloat = 113
-        let bw: CGFloat = 72 * (1 + squash)
+        let bw: CGFloat = 72 * (1 + squash) * (p.hungry && !celebrating ? 0.9 : 1)
         let bh: CGFloat = 60 * (1 - squash) * (1 + breathe)
         let by: CGFloat = ground - 5 - jump
         let top = by - bh
@@ -116,6 +162,16 @@ enum PetArt {
         let shW = 56 * (1 - min(jump, 30) / 60)
         ctx.fill(Path(ellipseIn: CGRect(x: 60 - shW / 2, y: ground - 3.5, width: shW, height: 7)),
                  with: .color(.black.opacity(p.held ? 0.06 : 0.16)))
+
+        // Spins and back-flips turn the whole body around its middle; effects drawn later stay put.
+        let world = ctx
+        let mid = CGPoint(x: cx, y: by - bh / 2)
+        if spinX != 1 || flipAngle != 0 {
+            ctx.translateBy(x: mid.x, y: mid.y)
+            if flipAngle != 0 { ctx.rotate(by: .radians(flipAngle * Double(-p.facing))) }
+            if spinX != 1 { ctx.scaleBy(x: max(abs(spinX), 0.12) * (spinX < 0 ? -1 : 1), y: 1) }
+            ctx.translateBy(x: -mid.x, y: -mid.y)
+        }
 
         // Feet.
         var liftL: CGFloat = 0, liftR: CGFloat = 0
@@ -337,6 +393,11 @@ enum PetArt {
             }
         } else {
             switch mood {
+            case .celebrating where p.celebration == .dance:
+                // Disco: one arm up, then the other.
+                let up = sin(t * 8) > 0
+                arm(CGPoint(x: cx - bw * 0.5, y: up ? top + bh * 0.18 : shoulderY), up ? -2.6 : 0.35)
+                arm(CGPoint(x: cx + bw * 0.5, y: up ? shoulderY : top + bh * 0.18), up ? -0.35 : 2.6)
             case .celebrating:
                 for side in [-1.0, 1.0] as [CGFloat] {
                     arm(CGPoint(x: cx + side * bw * 0.5, y: top + bh * 0.18), side * (2.6 + CGFloat(sin(t * 12)) * 0.25))
@@ -369,6 +430,79 @@ enum PetArt {
             }
         }
 
+        // Young pets have little leaves on their head.
+        if p.sprouts > 0 {
+            let leaf = RGBA(0x6CC04A).color, stem = RGBA(0x3E8E2A).color
+            var s = Path()
+            s.move(to: CGPoint(x: cx, y: top + 1))
+            s.addQuadCurve(to: CGPoint(x: cx + 1, y: top - 7), control: CGPoint(x: cx - 2, y: top - 3))
+            ctx.stroke(s, with: .color(stem), style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
+            let sway = CGFloat(sin(t * 2.5)) * 0.15
+            // Leaves point up-left and up-right (a single leaf points up-right).
+            let angles: [CGFloat] = p.sprouts >= 2 ? [.pi + 0.6, -0.6] : [-0.6]
+            for angle in angles {
+                let e = Path(ellipseIn: CGRect(x: 0, y: -2.6, width: 9, height: 5.2))
+                    .applying(CGAffineTransform(rotationAngle: angle + sway))
+                    .applying(CGAffineTransform(translationX: cx + 1, y: top - 7))
+                ctx.fill(e, with: .color(leaf))
+                ctx.stroke(e, with: .color(stem), lineWidth: 1)
+            }
+        }
+
+        // Dirt after lazy days: smudges on the body.
+        if p.dirt > 0 && !celebrating {
+            ctx.drawLayer { c in
+                c.clip(to: body)
+                for i in 0..<(p.dirt * 3) {
+                    let a = Double(i) * 2.39996, r = 0.25 + 0.2 * Double(i % 3)
+                    let x = cx + CGFloat(cos(a) * r) * bw * 0.9, y = by - bh * 0.45 + CGFloat(sin(a) * r) * bh * 0.8
+                    let w = CGFloat(4 + i % 3 * 2)
+                    c.fill(Path(ellipseIn: CGRect(x: x - w / 2, y: y - w / 3, width: w, height: w * 0.66)),
+                           with: .color(RGBA(0x6B5544, 0.32).color))
+                }
+            }
+        }
+
+        // Accessories.
+        for a in p.wearing {
+            switch a {
+            case .scarf:
+                ctx.drawLayer { c in
+                    c.clip(to: body)
+                    var band = Path()
+                    band.move(to: CGPoint(x: cx - bw * 0.55, y: by - bh * 0.40))
+                    band.addQuadCurve(to: CGPoint(x: cx + bw * 0.55, y: by - bh * 0.40), control: CGPoint(x: cx, y: by - bh * 0.26))
+                    c.stroke(band, with: .color(RGBA(0xD84343).color), lineWidth: 7)
+                    c.stroke(band, with: .color(.white.opacity(0.5)), style: StrokeStyle(lineWidth: 7, dash: [2, 5]))
+                }
+                let tail = Path(roundedRect: CGRect(x: -3, y: 0, width: 6, height: 13), cornerRadius: 2)
+                    .applying(CGAffineTransform(rotationAngle: 0.25 + CGFloat(sin(t * 4)) * 0.08))
+                    .applying(CGAffineTransform(translationX: cx + bw * 0.22, y: by - bh * 0.33))
+                ctx.fill(tail, with: .color(RGBA(0xD84343).color))
+            case .sunglasses where mood != .sleeping && !p.held:
+                for side in [-1.0, 1.0] as [CGFloat] {
+                    let r = CGRect(x: fx + side * ex - 7, y: ey - 4.5, width: 14, height: 9)
+                    ctx.fill(Path(roundedRect: r, cornerRadius: 3.5), with: .color(.black.opacity(0.88)))
+                    var glare = Path()
+                    glare.move(to: CGPoint(x: r.minX + 3, y: r.minY + 2.5))
+                    glare.addLine(to: CGPoint(x: r.minX + 6, y: r.minY + 2.5))
+                    ctx.stroke(glare, with: .color(.white.opacity(0.7)), style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
+                }
+                var bridge = Path()
+                bridge.move(to: CGPoint(x: fx - ex + 7, y: ey - 1.5))
+                bridge.addLine(to: CGPoint(x: fx + ex - 7, y: ey - 1.5))
+                ctx.stroke(bridge, with: .color(.black.opacity(0.88)), lineWidth: 1.6)
+            case .bow:
+                ctx.draw(Text(a.emoji).font(.system(size: 15)), at: CGPoint(x: cx + bw * 0.30, y: top + 5))
+            case .tophat, .crown, .gradcap:
+                ctx.draw(Text(a.emoji).font(.system(size: a == .crown ? 20 : 23)), at: CGPoint(x: cx, y: top - (a == .crown ? 3 : 6)))
+            default:
+                break
+            }
+        }
+
+        ctx = world
+
         // Effects.
         switch mood {
         case .happy:
@@ -390,6 +524,26 @@ enum PetArt {
             }
             ctx.fill(sparkle(at: CGPoint(x: cx - 40, y: top + 2), r: 7), with: .color(RGBA(0xFFC93C).color))
             ctx.fill(sparkle(at: CGPoint(x: cx + 40, y: top - 6), r: 5), with: .color(RGBA(0xFFC93C).color))
+            if p.celebration == .fireworks {
+                for k in 0..<3 {
+                    let ph = (t * 1.1 + Double(k) / 3).truncatingRemainder(dividingBy: 1)
+                    let center = CGPoint(x: 60 + CGFloat([-32.0, 30, 2][k]), y: CGFloat([22.0, 14, 6][k]))
+                    let radius = CGFloat(4 + ph * 18)
+                    for j in 0..<10 {
+                        let a = Double(j) / 10 * 2 * .pi
+                        let pt = CGPoint(x: center.x + CGFloat(cos(a)) * radius, y: center.y + CGFloat(sin(a)) * radius)
+                        ctx.fill(Path(ellipseIn: CGRect(x: pt.x - 1.6, y: pt.y - 1.6, width: 3.2, height: 3.2)),
+                                 with: .color(RGBA(colors[(j + k) % colors.count]).color.opacity(1 - ph)))
+                    }
+                }
+            }
+            if p.golden {
+                for i in 0..<6 {
+                    let a = t * 1.5 + Double(i) / 6 * 2 * .pi
+                    let pt = CGPoint(x: cx + CGFloat(cos(a)) * bw * 0.75, y: by - bh * 0.5 + CGFloat(sin(a)) * bh * 0.8)
+                    ctx.fill(sparkle(at: pt, r: 4 + 2 * CGFloat(abs(sin(t * 5 + Double(i))))), with: .color(RGBA(0xFFD700).color))
+                }
+            }
         case .annoyed:
             let slide = CGFloat((t * 5).truncatingRemainder(dividingBy: 9))
             ctx.fill(drop(at: CGPoint(x: cx + bw * 0.40, y: top + bh * 0.12 + slide)), with: .color(RGBA(0x9ED8FF).color))
@@ -422,6 +576,41 @@ enum PetArt {
             let ph = (t * 0.6).truncatingRemainder(dividingBy: 1)
             ctx.draw(Text("♥").font(.system(size: 12 + ph * 4, weight: .bold)).foregroundColor(RGBA(0xFF5C8A).color.opacity(1 - ph)),
                      at: CGPoint(x: cx - 30, y: top - CGFloat(ph) * 18))
+        }
+
+        // Flies buzz around a pet left dirty for days.
+        if p.dirt >= 2 && !celebrating {
+            for i in 0..<(p.dirt - 1) {
+                let a = t * (3 + Double(i)) + Double(i) * 2.5
+                let pt = CGPoint(x: cx + CGFloat(cos(a)) * bw * 0.72, y: top - 6 + CGFloat(sin(a * 1.7)) * 7)
+                let wing = CGFloat(abs(sin(t * 40))) * 2.5 + 1
+                ctx.fill(Path(ellipseIn: CGRect(x: pt.x - 2.5, y: pt.y - wing - 1, width: 3, height: wing)), with: .color(.white.opacity(0.8)))
+                ctx.fill(Path(ellipseIn: CGRect(x: pt.x - 0.5, y: pt.y - wing - 1, width: 3, height: wing)), with: .color(.white.opacity(0.8)))
+                ctx.fill(Path(ellipseIn: CGRect(x: pt.x - 2, y: pt.y - 1.5, width: 4, height: 3)), with: .color(.black.opacity(0.85)))
+            }
+        }
+
+        // A hungry tummy rumbles.
+        if p.hungry && !celebrating && mood != .sleeping && sin(t * 1.6) > 0.3 {
+            for i in 0..<2 {
+                var w = Path()
+                let x0 = cx + bw * 0.48 + CGFloat(i) * 4, y0 = by - bh * 0.28 + CGFloat(i) * 6
+                w.move(to: CGPoint(x: x0, y: y0))
+                w.addCurve(to: CGPoint(x: x0 + 8, y: y0), control1: CGPoint(x: x0 + 2, y: y0 - 3), control2: CGPoint(x: x0 + 6, y: y0 + 3))
+                ctx.stroke(w, with: .color(pal.line.color.opacity(0.7)), style: StrokeStyle(lineWidth: 1.4, lineCap: .round))
+            }
+        }
+
+        // The treat for a finished task falls into the pet's mouth.
+        if let food = p.food, p.foodT < 1.6 {
+            if p.foodT < 0.7 {
+                let k = CGFloat(p.foodT / 0.7)
+                ctx.draw(Text(food).font(.system(size: 17)), at: CGPoint(x: fx, y: 0 + (my - 0) * k * k))
+            } else {
+                let fade = 1 - (p.foodT - 0.7) / 0.9
+                ctx.draw(Text(L("măm!", "nom!")).font(.system(size: 10, weight: .heavy, design: .rounded))
+                    .foregroundColor(pal.line.color.opacity(fade)), at: CGPoint(x: fx + 24, y: my - 10 - CGFloat(1 - fade) * 8))
+            }
         }
     }
 

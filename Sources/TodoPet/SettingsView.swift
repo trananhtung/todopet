@@ -27,6 +27,12 @@ struct SettingsView: View {
                 }
                 Toggle(L("Âm thanh", "Sounds"), isOn: $prefs.soundOn)
                 Toggle(L("Khi nổi cáu thì đuổi theo con trỏ chuột", "Chase the mouse cursor when grumpy"), isOn: $prefs.chaseWhenAngry)
+                Toggle(L("Quậy khi bạn lười (càu nhàu, diễu hành với biển, đứng chắn màn hình)",
+                         "Mischief when you slack (grumbling, sign parade, standing in the way)"), isOn: $prefs.antics)
+                Toggle(L("Pet nói thành tiếng (giọng Linh của macOS)", "Pet speaks out loud (macOS voice)"), isOn: $prefs.voiceOn)
+                if prefs.voiceOn {
+                    Button(L("Nghe thử", "Test voice")) { Voice.shared.say(L("Ê! Làm việc đi chứ!", "Hey! Get to work!")) }
+                }
                 Toggle(L("Mở cùng macOS", "Open at login"), isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, on in
                         do {

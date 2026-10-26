@@ -25,6 +25,21 @@ English · <a href="README.vi.md">Tiếng Việt</a>
 - **Spots tasks you keep postponing.** When a task has sat on your list for 3+ days, the pet asks whether to split it into 15–30 minute steps (added as Todoist sub-tasks, with step 1 on today's plan) or drop it from the plan. With a Claude API key, **Ask Claude** suggests the steps for you.
 - **Speaks English and Vietnamese**, switchable in Settings.
 
+### A pet that lives with your work
+
+![Growth, hunger, accessories and celebrations](docs/life.png)
+
+- **Feed it by finishing tasks.** Every finished task drops a treat into its mouth (+25% fullness). Fullness drains about 7% per work hour, so a lazy day leaves it thin, hungry and rumbling. Each workday you do nothing makes it dirtier, up to 3 levels with flies buzzing around, and each finished task washes one layer off. All of this carries over to the next day.
+- **Watch it grow.** Tasks earn XP, and the pet grows from Baby (with little leaves on its head) to Kid, Teen, Grown-up and Master.
+- **Surprise celebrations.** Each finished task gets a random dance: jump, spin, back-flip or disco. One in ten is a rare golden treat with a golden pet. Finishing tasks within 30 minutes of each other builds a combo (×2, ×3…) worth more XP, ending in fireworks.
+- **Unlock things to wear.** The pet earns a bow, scarf, sunglasses, top hat, crown and grad cap through milestones like your first task, a 3-day streak, a ×3 combo, 25 tasks and a 7-day streak. A sticker book collects every day you finish your whole plan.
+- **Mischief that escalates when you slack.** After 10 minutes annoyed, it sighs and stomps. After 10 minutes grumpy, it marches across the screen dragging a sign with the task you're avoiding. Five minutes on YouTube while grumpy and it leaps into the middle of the screen with a (╯°□°)╯︵ ┻━┻. At the end of the day it reports, sulking, how long you spent on distractions. It can also say its lines out loud (off by default).
+- **It plays fair.** No mischief during meetings or focus sessions or while you're away. At most one big stunt every 20 minutes. Every stunt has a **Spare me 15'** button, and clicking the pet calls it off. You can turn mischief off in Settings.
+
+| Wardrobe | Mischief |
+|---|---|
+| ![Wardrobe](docs/wardrobe.png) | ![Sign](docs/sign.png)<br>![Table flip](docs/bubble-block.png) |
+
 | Board | Bubble | Split a task |
 |---|---|---|
 | ![Board](docs/board-light.png) | ![Bubble](docs/bubble-light.png)<br>![Postponed task](docs/bubble-stuck.png) | ![Split](docs/split.png) |
@@ -94,6 +109,8 @@ Mochi keeps a 0–100 happiness score, recalculated every 15 seconds. Hover the 
 | +10 during a focus session | Up to −30 when nothing moves for more than 90 minutes |
 | Meeting time counts as work | Up to −35 after 2+ minutes in a distracting app or website |
 | | −3 per task that keeps getting postponed (up to −9) |
+| | Up to −15 when it's hungry (below 30% full) |
+| | −5 per level of dirt |
 
 Score ≥ 75 is happy, ≥ 50 is chill, ≥ 30 is annoyed, and anything lower is grumpy. Outside work hours, at night, during meetings, or when you've been away for 10 minutes, it calms down or falls asleep, and it never nags while you're away.
 
@@ -107,13 +124,15 @@ In priority order, at most one bubble at a time:
 4. "What are our 3 things today?" every 30 minutes after the planning deadline until there are enough tasks
 5. A distracting app or website open for more than 2 minutes
 6. A task that keeps getting postponed: split it or drop it
-7. Overdue tasks, every 90 minutes
-8. Once a day, a time block for the next task
-9. End-of-day review
-10. A nudge with the next task, every 45 minutes
-11. A productivity tip now and then, only when the mood is good
+7. Hungry: begging for a finished task, at most hourly
+8. Mischief while you slack: grumbling, then the sign parade (the table flip comes with rule 5)
+9. Overdue tasks, every 90 minutes
+10. Once a day, a time block for the next task
+11. End-of-day review, then a sulky distraction report if you spent 10+ minutes on distractions
+12. A nudge with the next task, every 45 minutes
+13. A productivity tip now and then, only when the mood is good
 
-All timings are in **Settings**: daily target, work hours, work days, planning deadline, reminder interval, focus and break length, distracting apps and websites, calendar options, when a task counts as postponed, a custom Todoist filter for "my day" (for example `(today | overdue) & #Work`), pet size, sounds, and open at login.
+All timings are in **Settings**: daily target, work hours, work days, planning deadline, reminder interval, focus and break length, distracting apps and websites, calendar options, when a task counts as postponed, a custom Todoist filter for "my day" (for example `(today | overdue) & #Work`), pet size, sounds, mischief, spoken lines, and open at login.
 
 ## Why these features
 
@@ -128,13 +147,16 @@ The behavior is based on well-known productivity practices, kept deliberately si
 - **Procrastination often means the task is too big or vague**: breaking it into a small, concrete first step makes starting easier, so the pet suggests splitting tasks you keep postponing.
 - **Shutdown ritual**: close the day by reviewing and rescheduling (Cal Newport).
 - **Emotional feedback**: a character that visibly reacts to your progress makes progress feel rewarding, and slacking slightly uncomfortable.
+- **Caring for a pet** (the "Tamagotchi effect", used by apps like Finch): you work partly to keep it fed and clean, and the consequences last across days. Losing something you have motivates more than an equal gain.
+- **Variable rewards**: unpredictable celebrations and rare golden treats stay exciting longer than a fixed reward, which is why games use them.
 
 ## Privacy
 
 - No analytics and no servers of its own. Network traffic goes to `api.todoist.com`, and to `api.anthropic.com` only when you press **Ask Claude**.
 - Distraction detection reads the **name of the frontmost app** and, if a browser is in front, the **address of its active tab**. Addresses stay in memory and are never stored or sent anywhere. No screen recording or accessibility access is needed.
 - The calendar is read locally through macOS (EventKit); events never leave your Mac.
-- The "postponed tasks" log is just task IDs and dates in the app's local preferences.
+- The "postponed tasks" log is just task IDs and dates in the app's local preferences, and the pet's life (fullness, XP, accessories, today's distraction minutes per site) is stored locally the same way.
+- Spoken lines use the voices built into macOS, offline.
 - Idle detection only reads "seconds since the last input", which needs no permission.
 
 ## Development
@@ -143,6 +165,7 @@ The behavior is based on well-known productivity practices, kept deliberately si
 scripts/build.sh                                    # build build/TodoPet.app
 build/TodoPet.app/Contents/MacOS/TodoPet --selftest   # logic tests (dates, API parsing, moods)
 build/TodoPet.app/Contents/MacOS/TodoPet --demo       # run with sample data
+TODOPET_ANTIC=parade build/TodoPet.app/Contents/MacOS/TodoPet --demo   # see the mischief (parade or block) right away
 build/TodoPet.app/Contents/MacOS/TodoPet --snapshot out/  # render moods, board and bubble to PNG
 ```
 
@@ -156,6 +179,9 @@ build/TodoPet.app/Contents/MacOS/TodoPet --snapshot out/  # render moods, board 
 | `StuckTracker.swift` | Log of days each task sat on your list |
 | `ClaudeClient.swift` | Messages API call that splits a task into steps |
 | `PlanningViews.swift` | Calendar card and split-a-task view |
+| `PetLife.swift` | Fullness, dirt, XP and stages, combos, accessories, day settlement |
+| `Antics.swift` | Mischief types, the dragged sign, spoken lines |
+| `LifeViews.swift` | Life bar and wardrobe & achievements view |
 | `PetArt.swift` | The pet, drawn in code for every mood |
 | `PetWindow.swift` | Floating window, walking, drag and drop |
 | `Bubble.swift` / `BoardView.swift` / `SettingsView.swift` | UI |

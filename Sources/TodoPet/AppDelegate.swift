@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var brain: Brain!
     private var pet: PetController!
     private var bubbles: BubbleController!
+    private let sign = SignController()
     private var board: BoardController!
     private var statusItem: NSStatusItem!
     private var settingsWindow: NSWindow?
@@ -61,7 +62,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.fill(menu)
             NSMenu.popUpContextMenu(menu, with: event, for: self.pet.hit)
         }
-        pet.onMoved = { [weak self] frame in self?.bubbles.follow(frame) }
+        pet.onMoved = { [weak self] frame in
+            guard let self else { return }
+            bubbles.follow(frame)
+            sign.follow(frame, facing: pet.motion.facing)
+        }
+        pet.onAnticEnded = { [weak self] in
+            self?.sign.hide()
+            self?.brain.endAntic()
+        }
+        brain.$antic.receive(on: DispatchQueue.main).sink { [weak self] antic in
+            MainActor.assumeIsolated { self?.perform(antic) }
+        }.store(in: &cancellables)
 
         bubbles.model.onAction = { [weak self] action in
             self?.brain.bubble = nil
@@ -107,7 +119,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         pet.paused = bubbles.isVisible || board.isShown
     }
 
+    /// Plays the brain's mischief with the pet window (grumbling needs no movement).
+    private func perform(_ antic: AnticEvent?) {
+        guard pet.isVisible else { return }
+        switch antic?.kind {
+        case .parade(let text)?:
+            sign.show(text)
+            pet.startParade()
+            sign.follow(pet.frame, facing: pet.motion.facing)
+        case .block?:
+            pet.startBlock()
+        case .grumble?:
+            break
+        case nil:
+            sign.hide()
+            pet.endAntic()
+        }
+    }
+
     private func petClicked() {
+        // Clicking the pet calls off any mischief.
+        if pet.isInAntic { brain.endAntic() }
         if let b = brain.bubble, b.actions.isEmpty { brain.bubble = nil }
         if board.isShown {
             board.popover.performClose(nil)

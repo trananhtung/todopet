@@ -210,6 +210,71 @@ enum Lines {
           "Took \(q(t)) off the plan (still in Todoist, no date). Feels lighter? 🙂")
     }
 
+    // MARK: Pet life
+
+    static func golden() -> String {
+        L("✨ HIẾM! Bánh vàng cho bạn! ✨", "✨ RARE! A golden treat! ✨")
+    }
+
+    static func combo(_ n: Int) -> String {
+        L("🔥 Combo ×\(n)! Đang cháy quá!", "🔥 Combo ×\(n)! You're on fire!")
+    }
+
+    static func cleaned(_ dirtLeft: Int) -> String {
+        dirtLeft == 0 ? L("🛁 Mình sạch bong rồi!", "🛁 Squeaky clean again!") : L("🛁 Sạch hơn chút rồi…", "🛁 A bit cleaner…")
+    }
+
+    static func levelUp(_ s: Stage) -> String {
+        L("⬆️ Mình lớn lên thành \(s.name)!", "⬆️ I grew up: \(s.name)!")
+    }
+
+    static func unlocked(_ items: [Accessory]) -> String {
+        L("🎁 Mở khoá: ", "🎁 Unlocked: ") + items.map { "\($0.emoji) \($0.name)" }.joined(separator: ", ")
+    }
+
+    static func streak(_ n: Int) -> String {
+        L("🔥 Chuỗi \(n) ngày đạt mục tiêu — giữ nhé!", "🔥 \(n)-day streak — keep it going!")
+    }
+
+    static func dirty(_ dirt: Int) -> String {
+        L("🪰 Mình bẩn quá… \(dirt) ngày rồi bạn không làm gì. Xong 1 việc để tắm cho mình nhé.",
+          "🪰 I'm filthy… \(dirt) lazy day(s). Finish a task to give me a bath.")
+    }
+
+    static func hungry(_ satiety: Double, next: TodoTask?) -> String {
+        let n = next.map { L(" Xong \(q($0)) cho mình ăn với 🥺", " Finish \(q($0)) and feed me 🥺") } ?? ""
+        return satiety < 10 ? L("Đói lả rồi… 😵‍💫", "Starving… 😵‍💫") + n : L("Bụng mình réo rồi nè 🍙", "My tummy is rumbling 🍙") + n
+    }
+
+    static func grumble(_ next: TodoTask) -> String {
+        pick([("Haizzz… 😮‍💨 \(q(next)) vẫn chưa ai đụng tới.", "Sigh… 😮‍💨 Nobody has touched \(q(next)) yet."),
+              ("*giậm chân* Mình chờ \(q(next)) lâu lắm rồi đó 😤", "*stomps* I've been waiting for \(q(next)) forever 😤")])
+    }
+
+    static func parade(_ next: TodoTask) -> String {
+        L("Mình sẽ diễu hành tới khi bạn làm \(q(next)) thì thôi! 📢", "I'm marching until you do \(q(next))! 📢")
+    }
+
+    static func block(app: String, next: TodoTask?) -> String {
+        let n = next.map { L(" Làm \(q($0)) đi!", " Go do \(q($0))!") } ?? ""
+        return L("(╯°□°)╯︵ ┻━┻ ĐỦ RỒI \(app.uppercased())!", "(╯°□°)╯︵ ┻━┻ ENOUGH \(app.uppercased())!") + n
+    }
+
+    static func distractionSummary(_ d: [String: Double]) -> String {
+        let total = Int(d.values.reduce(0, +) / 60)
+        let top = d.sorted { $0.value > $1.value }.prefix(3).map { "\($0.key) \(Int($0.value / 60))'" }.joined(separator: ", ")
+        return L("Hôm nay bạn ở mấy chỗ xao nhãng \(total) phút đó 😒 (\(top))",
+                 "You spent \(total) minutes on distractions today 😒 (\(top))")
+    }
+
+    // Spoken lines (short, no emoji).
+    static func voiceGrumble() -> String { pick([("Haizzz. Làm việc đi chứ.", "Sigh. Get to work."), ("Mình chán quá à.", "I'm so bored.")]) }
+    static func voiceAngry(_ t: TodoTask) -> String { L("Ê! Làm \(TextClean.short(t.title, 30)) ngay!", "Hey! Do \(TextClean.short(t.title, 30)) now!") }
+    static func voiceBlock(app: String) -> String { L("Tắt \(app) đi!", "Close \(app)!") }
+    static func voiceHungry() -> String { L("Mình đói quá.", "I'm so hungry.") }
+    static func voiceCheer() -> String { pick([("Tuyệt vời!", "Awesome!"), ("Hoan hô!", "Hooray!")]) }
+    static func voiceSummary(minutes: Int) -> String { L("Hôm nay bạn lướt mạng \(minutes) phút đó.", "You goofed off for \(minutes) minutes today.") }
+
     /// Short, evidence-based productivity tips the pet drops occasionally.
     static func tip() -> String {
         pick([

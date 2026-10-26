@@ -25,6 +25,21 @@ Một chú pet nhỏ cho macOS, đi dạo trên thanh Dock, đọc công việc 
 - **Phát hiện việc bị dời mãi.** Việc nào nằm trong danh sách từ 3 ngày trở lên, pet hỏi bạn muốn chia nhỏ hay bỏ khỏi kế hoạch. Chia nhỏ là tách thành các bước 15–30 phút, thêm vào Todoist dưới dạng việc con, bước 1 vào kế hoạch hôm nay. Nếu có API key Claude, nút **Nhờ Claude gợi ý** sẽ đề xuất các bước giúp bạn.
 - **Nói tiếng Việt và tiếng Anh**, đổi trong Cài đặt.
 
+### Một chú pet sống cùng công việc của bạn
+
+![Lớn lên, đói, phụ kiện và ăn mừng](docs/life-vi.png)
+
+- **Làm xong việc là cho pet ăn.** Mỗi việc xong là một món ngon rơi vào miệng pet (+25% độ no). Độ no giảm khoảng 7% mỗi giờ làm việc, nên lười cả ngày thì pet gầy, đói, bụng réo. Mỗi ngày làm việc mà không xong việc nào, pet bẩn thêm một lớp, tối đa 3 lớp, kèm ruồi bay quanh. Mỗi việc xong tắm sạch một lớp. Tất cả giữ nguyên sang ngày hôm sau.
+- **Nhìn pet lớn lên.** Việc xong cho XP, và pet lớn dần từ Em bé (có mầm lá trên đầu) lên Nhóc, Thiếu niên, Trưởng thành, Cao thủ.
+- **Ăn mừng bất ngờ.** Mỗi việc xong là một kiểu ngẫu nhiên: nhảy, xoay, lộn nhào, nhảy disco. 1/10 lần là bánh vàng hiếm, pet hoá vàng. Xong việc liên tiếp trong vòng 30 phút sẽ thành combo ×2, ×3…, nhiều XP hơn, và kết bằng pháo hoa.
+- **Mở khoá đồ để mặc.** Nơ, khăn, kính râm, mũ quý ông, vương miện, mũ tốt nghiệp, mở theo các cột mốc: việc đầu tiên, chuỗi 3 ngày, combo ×3, 25 việc, chuỗi 7 ngày… Có thêm sổ sticker ghi lại những ngày bạn làm trọn kế hoạch.
+- **Quậy leo thang khi bạn lười.** Nhăn nhó 10 phút thì pet thở dài, giậm chân. Cáu 10 phút thì pet diễu hành ngang màn hình, kéo theo tấm biển ghi tên việc bạn đang né. Đang cáu mà ngồi YouTube 5 phút thì pet nhảy lên giữa màn hình kèm (╯°□°)╯︵ ┻━┻. Cuối ngày, pet hờn dỗi báo bạn đã lướt mạng bao lâu. Pet có thể nói thành tiếng bằng giọng Linh của macOS (mặc định tắt).
+- **Quậy có luật.** Không quậy khi bạn đang họp, đang tập trung hay đã rời máy. Trò lớn tối đa 20 phút một lần. Mỗi trò có nút **Tha cho tôi 15'**, và bấm vào pet là pet thôi quậy. Bạn có thể tắt hẳn trò quậy trong Cài đặt.
+
+| Tủ đồ | Trò quậy |
+|---|---|
+| ![Tủ đồ](docs/wardrobe-vi.png) | ![Biển](docs/sign.png)<br>![Lật bàn](docs/bubble-block-vi.png) |
+
 | Bảng việc | Bong bóng thoại | Chia nhỏ việc |
 |---|---|---|
 | ![Bảng việc](docs/board-vi.png) | ![Bong bóng](docs/bubble-vi.png)<br>![Việc bị dời mãi](docs/bubble-stuck-vi.png) | ![Chia nhỏ](docs/split-vi.png) |
@@ -94,6 +109,8 @@ Mochi có điểm hạnh phúc từ 0 đến 100, tính lại mỗi 15 giây. R�
 | +10 khi đang tập trung | Tới −30 khi hơn 90 phút không có tiến triển |
 | Giờ họp được tính là làm việc | Tới −35 khi ở trong app hoặc trang web gây xao nhãng hơn 2 phút |
 | | −3 cho mỗi việc bị dời mãi (tối đa −9) |
+| | Tới −15 khi pet đói (dưới 30% no) |
+| | −5 cho mỗi lớp bẩn |
 
 Từ 75 điểm là vui, từ 50 là bình thường, từ 30 là nhăn nhó, thấp hơn nữa là nổi cáu. Ngoài giờ làm, ban đêm, khi đang họp, hoặc khi bạn rời máy 10 phút, pet dịu lại hoặc ngủ, và không bao giờ cằn nhằn lúc bạn vắng mặt.
 
@@ -107,13 +124,15 @@ Theo thứ tự ưu tiên, mỗi lúc chỉ một bong bóng:
 4. "Hôm nay mình làm 3 việc gì nào?" mỗi 30 phút sau hạn lên kế hoạch, cho tới khi đủ việc
 5. Mở app hoặc trang web gây xao nhãng quá 2 phút
 6. Việc bị dời mãi: chia nhỏ hay bỏ khỏi kế hoạch
-7. Việc quá hạn, mỗi 90 phút
-8. Mỗi ngày một lần, gợi ý khung giờ cho việc tiếp theo
-9. Tổng kết cuối ngày
-10. Nhắc việc tiếp theo, mỗi 45 phút
-11. Thỉnh thoảng một mẹo năng suất, chỉ khi pet đang vui
+7. Đói: xin bạn xong một việc, tối đa mỗi giờ một lần
+8. Quậy khi bạn lười: càu nhàu, rồi diễu hành với tấm biển (trò lật bàn đi kèm mục 5)
+9. Việc quá hạn, mỗi 90 phút
+10. Mỗi ngày một lần, gợi ý khung giờ cho việc tiếp theo
+11. Tổng kết cuối ngày, rồi báo cáo hờn dỗi nếu bạn xao nhãng từ 10 phút trở lên
+12. Nhắc việc tiếp theo, mỗi 45 phút
+13. Thỉnh thoảng một mẹo năng suất, chỉ khi pet đang vui
 
-Mọi mốc thời gian đều chỉnh được trong **Cài đặt**: số việc mỗi ngày, giờ làm, ngày làm việc, hạn lên kế hoạch, khoảng nhắc, độ dài phiên tập trung và giờ nghỉ, app và trang web gây xao nhãng, tuỳ chọn Lịch, sau bao nhiêu ngày thì tính là bị dời mãi, bộ lọc Todoist riêng cho "việc của tôi" (ví dụ `(today | overdue) & #Work`), kích thước pet, âm thanh, và mở cùng macOS.
+Mọi mốc thời gian đều chỉnh được trong **Cài đặt**: số việc mỗi ngày, giờ làm, ngày làm việc, hạn lên kế hoạch, khoảng nhắc, độ dài phiên tập trung và giờ nghỉ, app và trang web gây xao nhãng, tuỳ chọn Lịch, sau bao nhiêu ngày thì tính là bị dời mãi, bộ lọc Todoist riêng cho "việc của tôi" (ví dụ `(today | overdue) & #Work`), kích thước pet, âm thanh, trò quậy, giọng nói, và mở cùng macOS.
 
 ## Vì sao có những tính năng này
 
@@ -128,13 +147,16 @@ Hành vi của pet dựa trên các phương pháp năng suất phổ biến, c�
 - **Trì hoãn thường do việc quá to hoặc mơ hồ**: tách ra một bước đầu nhỏ, cụ thể sẽ dễ bắt tay vào hơn, nên pet gợi ý chia nhỏ những việc bạn cứ dời mãi.
 - **Nghi thức kết thúc ngày**: khép lại ngày bằng cách xem lại và dời việc (Cal Newport).
 - **Phản hồi cảm xúc**: một nhân vật phản ứng rõ ràng với tiến độ của bạn khiến việc hoàn thành có cảm giác được thưởng, còn lười thì hơi áy náy.
+- **Chăm một con pet** ("hiệu ứng Tamagotchi", app Finch đang dùng): bạn làm việc một phần để pet được no và sạch, và hậu quả kéo dài qua nhiều ngày. Sợ mất thứ đang có thúc đẩy mạnh hơn mong được thêm.
+- **Phần thưởng bất ngờ**: màn ăn mừng ngẫu nhiên và bánh vàng hiếm giữ được hứng thú lâu hơn phần thưởng cố định, nên game nào cũng dùng.
 
 ## Quyền riêng tư
 
 - Không thu thập dữ liệu, không có máy chủ riêng. Kết nối mạng chỉ tới `api.todoist.com`, và tới `api.anthropic.com` khi bạn bấm **Nhờ Claude gợi ý**.
 - Phát hiện xao nhãng đọc **tên app đang mở phía trước** và, nếu đó là trình duyệt, **địa chỉ tab đang mở**. Địa chỉ chỉ nằm trong bộ nhớ, không được lưu hay gửi đi đâu. Không cần quay màn hình hay quyền trợ năng.
 - Lịch được đọc ngay trên máy qua macOS (EventKit); sự kiện không rời khỏi máy bạn.
-- Nhật ký "việc bị dời mãi" chỉ gồm mã việc và ngày, lưu trong cài đặt cục bộ của app.
+- Nhật ký "việc bị dời mãi" chỉ gồm mã việc và ngày, lưu trong cài đặt cục bộ của app. Đời sống của pet (độ no, XP, phụ kiện, số phút xao nhãng hôm nay theo từng trang) cũng lưu cục bộ như vậy.
+- Giọng nói dùng giọng có sẵn của macOS, chạy offline.
 - Phát hiện vắng mặt chỉ đọc "số giây từ lần gõ phím/di chuột cuối", không cần cấp quyền.
 
 ## Phát triển

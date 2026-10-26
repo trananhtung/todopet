@@ -145,6 +145,65 @@ enum DevTools {
         do { _ = try ClaudeClient.parseSteps(Data(#"{"content":[],"stop_reason":"refusal"}"#.utf8)) } catch ClaudeError.refused { refused = true } catch {}
         check(refused, "Claude refusal detected")
 
+        // Pet life: feeding, combos, golden treats, unlocks.
+        check(Stage.of(xp: 0) == .baby && Stage.of(xp: 99) == .baby && Stage.of(xp: 100) == .kid && Stage.of(xp: 5000) == .master,
+              "growth stages from XP")
+        var life = LifeState()
+        let t0 = now
+        let f1 = LifeRules.feed(&life, now: t0, roll: 0.5, pick: 0)
+        check(f1.combo == 1 && life.xp == 10 && life.satiety == 95 && f1.food == "🍙" && f1.kind == .jump, "first feed")
+        check(f1.unlocked == [.bow] && life.wearing == ["bow"], "first task unlocks and wears the bow")
+        _ = LifeRules.feed(&life, now: t0.addingTimeInterval(600), roll: 0.5, pick: 0.3)
+        let f3 = LifeRules.feed(&life, now: t0.addingTimeInterval(1200), roll: 0.5, pick: 0.3)
+        check(f3.combo == 3 && f3.kind == .fireworks && life.xp == 10 + 15 + 20, "combo grows within 30 minutes and pays more XP")
+        check(f3.unlocked.contains(.sunglasses) && life.wearing.contains("sunglasses"), "combo ×3 unlocks sunglasses")
+        let f4 = LifeRules.feed(&life, now: t0.addingTimeInterval(1200 + 2400), roll: 0.05, pick: 0.9)
+        check(f4.combo == 1 && f4.golden && f4.food == "🍰" && life.goldens == 1, "combo resets after a gap; 10% golden treat")
+
+        // Hunger and day settlement.
+        var hungry = LifeState()
+        hungry.satiety = 50
+        hungry.lastDecayAt = t0
+        LifeRules.decay(&hungry, now: t0.addingTimeInterval(1800), working: true)
+        check(abs(hungry.satiety - 46.5) < 0.01, "hunger: −7 per work hour")
+        LifeRules.decay(&hungry, now: t0.addingTimeInterval(1800 + 3 * 3600), working: true)
+        check(abs(hungry.satiety - 39.5) < 0.01, "hunger capped at one hour per step (sleep, lunch)")
+        LifeRules.decay(&hungry, now: t0.addingTimeInterval(1800 + 5 * 3600), working: false)
+        check(abs(hungry.satiety - 39.5) < 0.01, "no hunger outside work")
+
+        var days = LifeState()
+        days.dayKey = "2026-10-20"
+        LifeRules.syncDay(&days, completed: 3, planned: 3, target: 3, workday: true)
+        _ = LifeRules.closeDay(&days, today: "2026-10-21") { _ in true }
+        check(days.streak == 1 && days.perfectDays == ["2026-10-20"] && days.xp == 30, "target met: streak +1, perfect-day sticker")
+        LifeRules.syncDay(&days, completed: 0, planned: 2, target: 3, workday: true)
+        _ = LifeRules.closeDay(&days, today: "2026-10-24") { _ in true }
+        check(days.streak == 0 && days.dirt == 3, "lazy day and two unseen workdays make the pet dirty")
+        _ = LifeRules.feed(&days, now: t0, roll: 0.5, pick: 0)
+        check(days.dirt == 2, "a finished task washes one layer off")
+        var weekend = LifeState()
+        weekend.dayKey = "2026-10-24"
+        weekend.streak = 4
+        LifeRules.syncDay(&weekend, completed: 0, planned: 0, target: 3, workday: false)
+        _ = LifeRules.closeDay(&weekend, today: "2026-10-25") { _ in false }
+        check(weekend.streak == 4 && weekend.dirt == 0, "days off don't break the streak")
+
+        let wardrobe = PetLife(persist: false, initial: {
+            var s = LifeState()
+            s.unlocked = ["bow", "crown"]
+            s.wearing = ["bow"]
+            return s
+        }())
+        wardrobe.toggle(.crown)
+        check(wardrobe.state.wearing == ["crown"], "one item per slot")
+        let old = try? JSONDecoder().decode(LifeState.self, from: Data(#"{"xp":120}"#.utf8))
+        check(old?.xp == 120 && old?.satiety == 70, "saved state with missing fields still loads")
+
+        i = MoodInputs()
+        i.satiety = 0
+        i.dirt = 3
+        check(MoodEngine.evaluate(i).mood == .annoyed, "starving and dirty pet is annoyed")
+
         // Language switch.
         let saved = currentLang
         currentLang = .en
@@ -170,6 +229,7 @@ enum DevTools {
         let prefs = Prefs(defaults: defaults)
         if let l = ProcessInfo.processInfo.environment["TODOPET_LANG"].flatMap(Lang.init(rawValue:)) { prefs.lang = l }
         savePNG(MoodSheet(), url.appendingPathComponent("moods.png"), scale: 2)
+        savePNG(LifeSheet(), url.appendingPathComponent("life.png"), scale: 2)
         savePNG(IconArt(), url.appendingPathComponent("icon-1024.png"), scale: 1)
 
         let brain = Brain(prefs: prefs, demo: true)
@@ -207,6 +267,21 @@ enum DevTools {
                     .padding(14).frame(width: 370).background(Color(nsColor: .windowBackgroundColor)), .aqua,
                          url.appendingPathComponent("delete-confirm.png"))
             }
+            let state = BoardState()
+            state.wardrobe = true
+            saveView(BoardView(brain: brain, prefs: prefs, state: state).background(Color(nsColor: .windowBackgroundColor)), .aqua,
+                     url.appendingPathComponent("wardrobe.png"))
+            let sign = SignModel()
+            sign.text = brain.day.next?.title ?? "Report"
+            saveView(SignView(model: sign), .aqua, url.appendingPathComponent("sign.png"))
+            let model = BubbleModel()
+            model.mood = .angry
+            model.bubble = Bubble(text: Lines.block(app: "youtube.com", next: brain.day.next), actions: [
+                BubbleAction(title: "▶︎ " + L("Tập trung 25'", "Focus 25'"), primary: true) {},
+                BubbleAction(title: L("Tha cho tôi 15'", "Spare me 15'")) {},
+            ])
+            saveView(BubbleView(model: model), .aqua, url.appendingPathComponent("bubble-block.png"))
+
             defaults.removePersistentDomain(forName: suite)
             print("Snapshots written to \(url.path)")
             exit(0)
@@ -266,6 +341,66 @@ struct MoodSheet: View {
     private func pet(_ pose: PetPose) -> some View {
         Canvas { ctx, size in PetArt.draw(&ctx, size: size, pose: pose) }
             .frame(width: 120, height: 120)
+    }
+}
+
+/// Growth stages, hunger, dirt, accessories and the celebration dances.
+struct LifeSheet: View {
+    private func pet(_ pose: PetPose, _ label: String) -> some View {
+        VStack(spacing: 0) {
+            Canvas { ctx, size in PetArt.draw(&ctx, size: size, pose: pose) }
+                .frame(width: 120, height: 120)
+            Text(label).font(.system(size: 11, weight: .semibold, design: .rounded))
+        }
+    }
+
+    private func life(_ change: (inout LifeState) -> Void) -> LifeState {
+        var s = LifeState()
+        change(&s)
+        return s
+    }
+
+    private func decorated(_ mood: Mood, t: Double = 0.4, _ s: LifeState) -> PetPose {
+        var p = PetPose(mood: mood, t: t)
+        p.decorate(s)
+        return p
+    }
+
+    private func celebrating(_ kind: CelebrationKind, t: Double, golden: Bool = false, foodT: Double? = nil) -> PetPose {
+        var p = PetPose(mood: .celebrating, t: t)
+        p.celebration = kind
+        p.golden = golden
+        if let foodT { p.food = "🍙"; p.foodT = foodT }
+        return p
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 4) {
+                ForEach(Stage.allCases, id: \.rawValue) { st in
+                    pet(decorated(.happy, life { $0.xp = Stage.thresholds[st.rawValue] }), st.name)
+                }
+                pet(decorated(.annoyed, life { $0.satiety = 12; $0.xp = 300 }), L("đói", "hungry"))
+                pet(decorated(.annoyed, life { $0.dirt = 3; $0.xp = 300 }), L("bẩn 3 ngày", "dirty ×3"))
+            }
+            HStack(spacing: 4) {
+                ForEach(Accessory.allCases) { a in
+                    pet(decorated(.normal, life { $0.xp = 700; $0.unlocked = [a.rawValue]; $0.wearing = [a.rawValue] }), a.emoji + " " + a.name)
+                }
+                pet(decorated(.happy, life { $0.xp = 1500; $0.wearing = ["crown", "sunglasses", "scarf"] }), "👑🕶️🧣")
+            }
+            HStack(spacing: 4) {
+                pet(celebrating(.jump, t: 0.2, foodT: 0.45), L("món ăn rơi", "treat falls"))
+                pet(celebrating(.spin, t: 0.28), "spin")
+                pet(celebrating(.flip, t: 0.27), "flip")
+                pet(celebrating(.dance, t: 0.1), "dance")
+                pet(celebrating(.fireworks, t: 0.3), "fireworks")
+                pet(celebrating(.fireworks, t: 0.35, golden: true), L("vàng hiếm", "rare golden"))
+            }
+        }
+        .padding(10)
+        .background(Color.white)
+        .foregroundColor(.black)
     }
 }
 

@@ -26,6 +26,7 @@ final class PetMotion {
 
 struct PetView: View {
     @ObservedObject var brain: Brain
+    @ObservedObject var life: PetLife
     let motion: PetMotion
 
     /// Calm moods animate slower to save battery; the pet runs all day.
@@ -42,7 +43,18 @@ struct PetView: View {
             let t = tl.date.timeIntervalSinceReferenceDate
             ZStack(alignment: .top) {
                 Canvas { ctx, size in
-                    PetArt.draw(&ctx, size: size, pose: motion.pose(mood: brain.mood, t: t))
+                    var pose = motion.pose(mood: brain.mood, t: t)
+                    pose.decorate(life.state)
+                    if let c = brain.celebration {
+                        pose.celebration = c.kind
+                        pose.golden = c.golden
+                        let since = tl.date.timeIntervalSince(c.start)
+                        if since < 1.6 {
+                            pose.food = c.food
+                            pose.foodT = since
+                        }
+                    }
+                    PetArt.draw(&ctx, size: size, pose: pose)
                 }
                 if let f = brain.focus {
                     FocusChip(session: f, now: tl.date)
@@ -140,7 +152,41 @@ final class PetController {
     private var y: CGFloat = 0
     private var vy: CGFloat = 0
 
-    private enum Behavior { case idle(until: Double), walk(toX: CGFloat), fall, held }
+    private enum Behavior {
+        case idle(until: Double), walk(toX: CGFloat), fall, held
+        // Mischief (see `AnticKind`).
+        case parade(toX: CGFloat), leap(from: NSPoint, to: NSPoint, start: Double), perch(until: Double)
+    }
+
+    /// Called when a parade or a perch on the screen is over.
+    var onAnticEnded: (() -> Void)?
+
+    var isInAntic: Bool {
+        switch behavior {
+        case .parade, .leap, .perch: true
+        default: false
+        }
+    }
+
+    /// Marches to the far side of the screen (the sign follows via `onMoved`).
+    func startParade() {
+        let vf = screen.visibleFrame
+        behavior = .parade(toX: x + size / 2 > vf.midX ? vf.minX + 10 : vf.maxX - size - 10)
+    }
+
+    /// Leaps up into the middle of the screen and stays there a while.
+    func startBlock() {
+        let vf = screen.visibleFrame
+        behavior = .leap(from: NSPoint(x: x, y: y), to: NSPoint(x: vf.midX - size / 2, y: vf.midY - size / 2),
+                         start: CACurrentMediaTime())
+    }
+
+    func endAntic() {
+        guard isInAntic else { return }
+        vy = 0
+        behavior = .fall
+        onAnticEnded?()
+    }
     private var behavior: Behavior = .fall
 
     /// True while a bubble or the board is open: the pet stands still.
@@ -165,7 +211,7 @@ final class PetController {
         panel.hidesOnDeactivate = false
 
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 124, height: 124))
-        let host = NSHostingView(rootView: PetView(brain: brain, motion: motion))
+        let host = NSHostingView(rootView: PetView(brain: brain, life: brain.life, motion: motion))
         host.frame = container.bounds
         host.autoresizingMask = [.width, .height]
         hit.frame = container.bounds
@@ -277,11 +323,35 @@ final class PetController {
                 motion.walking = true
                 motion.walkPhase += dt * Double(v / (size / 124)) / 38 * 9
             }
+        case .parade(let tx):
+            // Mischief ignores pauses: the bubble just follows along.
+            let dx = tx - x
+            if abs(dx) < 2 {
+                motion.walking = false
+                behavior = .idle(until: now + 2)
+                onAnticEnded?()
+            } else {
+                let dir: CGFloat = dx > 0 ? 1 : -1
+                let v = 95 * size / 124
+                x += dir * min(abs(dx), v * CGFloat(dt))
+                motion.facing = dir
+                motion.walking = true
+                motion.walkPhase += dt * 20
+            }
+        case .leap(let from, let to, let start):
+            motion.walking = false
+            let k = CGFloat(min(1, (now - start) / 0.7))
+            x = from.x + (to.x - from.x) * k
+            y = from.y + (to.y - from.y) * k + sin(.pi * k) * 120
+            if k >= 1 { behavior = .perch(until: now + 20) }
+        case .perch(let until):
+            motion.walking = false
+            if now >= until { endAntic() }
         }
 
         let vf = screen.visibleFrame
         switch behavior {
-        case .held, .fall: break
+        case .held, .fall, .leap, .perch: break
         default: y = groundY
         }
         if case .held = behavior {} else {
