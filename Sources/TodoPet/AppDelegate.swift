@@ -76,10 +76,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }.store(in: &cancellables)
 
         bubbles.model.onAction = { [weak self] action in
+            self?.brain.noteResponse(.picked(action.title))
             self?.brain.bubble = nil
             action.run()
         }
-        bubbles.model.onClose = { [weak self] in self?.brain.bubble = nil }
+        bubbles.model.onClose = { [weak self] in
+            if self?.brain.bubble?.reminder == true { self?.brain.noteResponse(.closed) }
+            self?.brain.bubble = nil
+        }
         board.onShownChanged = { [weak self] _ in self?.updatePause() }
 
         brain.$bubble.receive(on: DispatchQueue.main).sink { [weak self] b in
@@ -110,7 +114,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let id = b.id
         bubbles.show(b, petFrame: pet.frame, mood: brain.mood, name: prefs.petName) { [weak self] in
-            if self?.brain.bubble?.id == id { self?.brain.bubble = nil }
+            if self?.brain.bubble?.id == id {
+                if self?.brain.bubble?.reminder == true { self?.brain.noteResponse(.ignored) }
+                self?.brain.bubble = nil
+            }
         }
         updatePause()
     }
@@ -239,6 +246,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(ActionItem(L("Im lặng 1 giờ", "Quiet for 1 hour")) { [weak self] in self?.brain.quiet(minutes: 60) })
         }
         menu.addItem(ActionItem(L("Làm mới", "Refresh"), key: "r") { [weak self] in self?.brain.refreshSoon() })
+        menu.addItem(ActionItem(L("Nhật ký pet…", "Pet diary…")) { [weak self] in
+            self?.board.state.showLog = true
+            self?.openBoard(focusAdd: false)
+        })
         menu.addItem(.separator())
         menu.addItem(ActionItem(L("Cài đặt…", "Settings…"), key: ",") { [weak self] in self?.openSettings() })
         menu.addItem(ActionItem(L("Thoát TodoPet", "Quit TodoPet"), key: "q") { NSApp.terminate(nil) })

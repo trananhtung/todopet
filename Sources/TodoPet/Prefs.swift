@@ -66,6 +66,8 @@ final class Prefs: ObservableObject {
     @Published var stillWhileTyping: Bool { didSet { d.set(stillWhileTyping, forKey: "stillWhileTyping") } }
     /// Minimum minutes between two unsolicited bubbles.
     @Published var bubbleGap: Int { didSet { d.set(bubbleGap, forKey: "bubbleGap") } }
+    /// Keep the pet's diary (on this Mac only, 14 days).
+    @Published var keepLog: Bool { didSet { d.set(keepLog, forKey: "keepLog") } }
 
     /// First time the app ever ran; used so day one doesn't start with a grumpy pet.
     let firstLaunch: Date
@@ -85,7 +87,7 @@ final class Prefs: ObservableObject {
             "useCalendar": true, "adaptTarget": true, "meetingLead": 5, "stuckDays": 3,
             "claudeModel": ClaudeClient.defaultModel,
             "antics": true, "voiceOn": false,
-            "protectFlow": true, "stillWhileTyping": true, "bubbleGap": 15,
+            "protectFlow": true, "stillWhileTyping": true, "bubbleGap": 15, "keepLog": true,
         ])
         lang = Lang(rawValue: d.string(forKey: "lang") ?? "") ?? .systemDefault
         petName = d.string(forKey: "petName") ?? "Mochi"
@@ -116,6 +118,7 @@ final class Prefs: ObservableObject {
         protectFlow = d.bool(forKey: "protectFlow")
         stillWhileTyping = d.bool(forKey: "stillWhileTyping")
         bubbleGap = d.integer(forKey: "bubbleGap")
+        keepLog = d.bool(forKey: "keepLog")
         if let f = d.object(forKey: "firstLaunch") as? Date {
             firstLaunch = f
         } else {

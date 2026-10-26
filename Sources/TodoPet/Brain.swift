@@ -15,6 +15,8 @@ struct Bubble: Identifiable {
     var seconds: Double = 12
     /// Bubbles with `urgent` may replace a bubble that is still on screen.
     var urgent = false
+    /// An unsolicited reminder (not a reply to something you did); your response goes into the diary.
+    var reminder = false
 }
 
 struct FocusSession {
@@ -72,6 +74,8 @@ final class Brain: ObservableObject {
     @Published private(set) var flow = false
     /// Hunger, dirt, growth, accessories: what the pet remembers across days.
     let life: PetLife
+    /// Why the pet did (or didn't) say something, kept on this Mac for tuning.
+    let log: PetLog
 
     /// Set by the app: open the task board (optionally focusing the "add task" field), the split view, and settings.
     var openBoard: ((_ focusAdd: Bool) -> Void)?
@@ -100,6 +104,8 @@ final class Brain: ObservableObject {
     private var annoyedSince: Date?
     private var angrySince: Date?
     private var engagedSince: Date?
+    private var flowStartedAt = Date()
+    private var distractionSession: (label: String, start: Date, logged: Bool)?
     private var lastFlowEnd = Date.distantPast
     private var lastAppSwitch = Date.distantPast
 
@@ -114,6 +120,8 @@ final class Brain: ObservableObject {
     init(prefs: Prefs, demo: Bool) {
         self.prefs = prefs
         life = demo ? PetLife(persist: false, initial: .demo) : PetLife()
+        log = PetLog(folder: demo ? nil : PetLog.defaultFolder)
+        log.enabled = prefs.keepLog
         if demo {
             useDemo()
             return
@@ -272,6 +280,8 @@ final class Brain: ObservableObject {
             lastSync = Date()
         } catch {
             errorText = error.localizedDescription
+            log.add(.sync, L("Lỗi đồng bộ Todoist: ", "Todoist sync failed: ") + error.localizedDescription,
+                    throttle: "sync-error", every: 30)
             if case TodoError.unauthorized = error {
                 say(Bubble(text: Lines.error(error.localizedDescription), actions: [
                     BubbleAction(title: L("Nhập token mới", "Enter a new token"), primary: true) { [weak self] in self?.openSettings?() },
@@ -428,7 +438,17 @@ final class Brain: ObservableObject {
         let r = MoodEngine.evaluate(i)
         score = r.score
         reasons = r.reasons
-        if mood != r.mood { mood = r.mood }
+        if mood != r.mood {
+            // Celebrations are logged with the finished task; everything else gets its reasons.
+            if mood != .celebrating && r.mood != .celebrating {
+                let why = r.reasons.prefix(2).map { "\($0.delta > 0 ? "+" : "")\($0.delta) \($0.text)" }.joined(separator: "; ")
+                log.add(.mood, L("Tâm trạng: \(mood.label) → \(r.mood.label) (điểm \(Int(r.score)))",
+                                 "Mood: \(mood.label) → \(r.mood.label) (score \(Int(r.score)))") + (why.isEmpty ? "" : " — " + why),
+                        throttle: "mood-\(mood.rawValue)-\(r.mood.rawValue)", every: 2)
+            }
+            mood = r.mood
+        }
+        log.enabled = prefs.keepLog
         if mood == .angry { angrySince = angrySince ?? now } else { angrySince = nil }
         if mood == .annoyed || mood == .angry { annoyedSince = annoyedSince ?? now } else { annoyedSince = nil }
     }
@@ -437,8 +457,17 @@ final class Brain: ObservableObject {
     private func settleLife(_ now: Date) {
         let today = DayMath.key(now)
         guard life.state.dayKey != today else { return }
+        let before = life.state
         let unlocked = life.mutate { s in
             LifeRules.closeDay(&s, today: today) { [prefs] key in DateParse.parse(key).map(prefs.isWorkday) ?? false }
+        }
+        let after = life.state
+        if !before.dayKey.isEmpty {
+            var text = L("Chốt ngày \(before.dayKey): xong \(before.dayCompleted)/\(before.dayTarget) → chuỗi \(after.streak) ngày",
+                         "Closed \(before.dayKey): \(before.dayCompleted)/\(before.dayTarget) done → \(after.streak)-day streak")
+            if after.perfectDays.count > before.perfectDays.count { text += L(", nhận sticker 🌟", ", earned a 🌟 sticker") }
+            if after.dirt > before.dirt { text += L(", bẩn thêm \(after.dirt - before.dirt) lớp", ", \(after.dirt - before.dirt) more layer(s) of dirt") }
+            log.add(.life, text)
         }
         if !unlocked.isEmpty {
             say(Bubble(text: Lines.unlocked(unlocked), seconds: 12, urgent: true))
@@ -472,11 +501,34 @@ final class Brain: ObservableObject {
 
     // MARK: - Talking
 
-    func say(_ b: Bubble, chime: Chime = .chatter) {
+    /// Shows a bubble. `why` marks it as an unsolicited reminder and records the reason in the diary;
+    /// without it the bubble is a reply to something you did.
+    func say(_ b: Bubble, chime: Chime = .chatter, why: String? = nil, antic: Bool = false) {
         if let cur = bubble, !cur.actions.isEmpty, !b.urgent, b.actions.isEmpty { return }
+        var b = b
+        b.reminder = why != nil
         bubble = b
         lastBubbleAt = Date()
         play(chime)
+        let quote = "“" + TextClean.short(b.text.replacingOccurrences(of: "\n", with: " "), 90) + "”"
+        if let why {
+            log.add(antic ? .antic : .bubble, quote + " — " + L("vì ", "because ") + why)
+        } else {
+            log.add(.system, L("Pet nói ", "Pet said ") + quote)
+        }
+    }
+
+    /// What you did with the last bubble: tapped a button, closed it, or let it fade away.
+    enum BubbleResponse {
+        case picked(String), closed, ignored
+    }
+
+    func noteResponse(_ r: BubbleResponse) {
+        switch r {
+        case .picked(let title): log.add(.response, L("Bạn bấm “\(title)”", "You tapped “\(title)”"), tag: "picked")
+        case .closed: log.add(.response, L("Bạn đóng bong bóng", "You closed the bubble"), tag: "closed")
+        case .ignored: log.add(.response, L("Bạn không phản hồi (tự ẩn)", "No response (faded away)"), tag: "ignored")
+        }
     }
 
     enum Chime {
@@ -528,6 +580,11 @@ final class Brain: ObservableObject {
     func quiet(minutes: Double?) {
         quietUntil = minutes.map { Date().addingTimeInterval($0 * 60) }
         if minutes != nil { bubble = nil }
+        if let q = quietUntil {
+            log.add(.hold, L("Bạn bật im lặng tới \(DayMath.timeString(q))", "You muted the pet until \(DayMath.timeString(q))"))
+        } else {
+            log.add(.system, L("Bạn bật lại nhắc nhở", "You turned reminders back on"))
+        }
     }
 
     private func tick() {
@@ -548,6 +605,7 @@ final class Brain: ObservableObject {
         }
         // Left the distracting app or site: the pet gets out of the way.
         if case .block? = antic?.kind, currentDistraction == nil { antic = nil }
+        trackDistraction(now)
         updateFlow(now)
         recompute()
         runRules(now)
@@ -561,7 +619,34 @@ final class Brain: ObservableObject {
         let inFlow = prefs.protectFlow && hasToken && CalmRules.inFlow(engagedSince: engagedSince, now: now)
         if flow != inFlow {
             flow = inFlow
-            if !inFlow { lastFlowEnd = now }
+            if inFlow {
+                flowStartedAt = engagedSince ?? now
+                log.add(.flow, L("Bạn vào guồng (gõ phím đều 10 phút) — pet giữ im lặng",
+                                 "You're in the zone (10 minutes of steady typing) — the pet stays quiet"), tag: "flowStart")
+            } else {
+                lastFlowEnd = now
+                let minutes = Int(now.timeIntervalSince(flowStartedAt) / 60)
+                log.add(.flow, L("Hết guồng sau \(minutes) phút", "Left the zone after \(minutes) minutes"), tag: "flowEnd", minutes: minutes)
+            }
+        }
+    }
+
+    /// Logs how long you stay in each distracting app or site.
+    private func trackDistraction(_ now: Date) {
+        let current = currentDistraction?.app
+        if let s = distractionSession, s.label != current {
+            let minutes = Int(now.timeIntervalSince(s.start) / 60)
+            if minutes >= 1 {
+                log.add(.distraction, L("Rời \(s.label) sau \(minutes) phút", "Left \(s.label) after \(minutes) minutes"),
+                        tag: "end", minutes: minutes)
+            }
+            distractionSession = nil
+        }
+        guard let label = current else { return }
+        if distractionSession == nil { distractionSession = (label, now, false) }
+        if let s = distractionSession, !s.logged, now.timeIntervalSince(s.start) >= 120 {
+            log.add(.distraction, L("Đang ở \(label) hơn 2 phút", "On \(label) for 2+ minutes"))
+            distractionSession?.logged = true
         }
     }
 
@@ -583,7 +668,11 @@ final class Brain: ObservableObject {
 
         let idle = Brain.idleSeconds()
         if idle > 300 {
-            if awaySince == nil { awaySince = now.addingTimeInterval(-idle) }
+            if awaySince == nil {
+                awaySince = now.addingTimeInterval(-idle)
+                log.add(.system, L("Bạn rời máy từ \(DayMath.timeString(awaySince!)) — pet không nhắc gì",
+                                   "You stepped away at \(DayMath.timeString(awaySince!)) — no reminders"))
+            }
             return
         }
 
@@ -597,11 +686,17 @@ final class Brain: ObservableObject {
                 }
                 actions.append(BubbleAction(title: "OK") {})
                 say(Bubble(text: Lines.meetingSoon(e, minutes: max(1, Int(mins.rounded(.up)))), actions: actions, seconds: 90, urgent: true),
-                    chime: .important)
+                    chime: .important, why: L("họp lúc \(DayMath.timeString(e.start))", "meeting at \(DayMath.timeString(e.start))"))
                 return
             }
         }
-        if CalendarMath.current(events, at: now) != nil { return }
+        if let m = CalendarMath.current(events, at: now) {
+            if once("in-meeting-\(m.id)") {
+                log.add(.meeting, L("Đang họp “\(m.title)” tới \(DayMath.timeString(m.end)) — pet giữ im lặng",
+                                    "In “\(m.title)” until \(DayMath.timeString(m.end)) — the pet stays quiet"))
+            }
+            return
+        }
         if focus != nil { return }
 
         guard hasToken else {
@@ -613,8 +708,11 @@ final class Brain: ObservableObject {
 
         if let away = awaySince {
             awaySince = nil
-            if now.timeIntervalSince(away) > 15 * 60, ctx.inWork, let next = day.next {
-                say(Bubble(text: Lines.welcomeBack(next), actions: [focusAction(next), laterAction()], seconds: 30))
+            let minutes = Int(now.timeIntervalSince(away) / 60)
+            log.add(.system, L("Bạn quay lại sau \(minutes) phút", "You came back after \(minutes) minutes"))
+            if minutes > 15, ctx.inWork, let next = day.next {
+                say(Bubble(text: Lines.welcomeBack(next), actions: [focusAction(next), laterAction()], seconds: 30),
+                    why: L("bạn vừa quay lại sau \(minutes) phút", "you just came back after \(minutes) minutes"))
                 return
             }
         }
@@ -625,12 +723,13 @@ final class Brain: ObservableObject {
             let mins = time.timeIntervalSince(now) / 60
             if mins > 0, mins <= 10, once("soon-\(t.id)") {
                 say(Bubble(text: Lines.soon(t, minutes: Int(mins.rounded(.up))),
-                           actions: [focusAction(t), completeAction(t)], seconds: 40, urgent: true), chime: .important)
+                           actions: [focusAction(t), completeAction(t)], seconds: 40, urgent: true), chime: .important,
+                    why: L("việc hẹn lúc \(DayMath.timeString(time))", "task due at \(DayMath.timeString(time))"))
                 return
             }
             if mins <= 0, mins > -5, once("now-\(t.id)") {
                 say(Bubble(text: Lines.dueNow(t), actions: [focusAction(t), completeAction(t)], seconds: 60, urgent: true),
-                    chime: .important)
+                    chime: .important, why: L("tới giờ hẹn \(DayMath.timeString(time))", "due now (\(DayMath.timeString(time)))"))
                 return
             }
         }
@@ -642,7 +741,9 @@ final class Brain: ObservableObject {
            d.minutes >= 5, every("antic", minutes: 20) {
             antic = AnticEvent(kind: .block, start: now)
             say(Bubble(text: Lines.block(app: d.app, next: day.next), actions: [focusAction(day.next), spareAction()],
-                       seconds: 25, urgent: true), chime: .grumble)
+                       seconds: 25, urgent: true), chime: .grumble,
+                why: L("đang cáu và ở \(d.app) \(Int(d.minutes)) phút → nhảy lên chắn màn hình",
+                       "grumpy and on \(d.app) for \(Int(d.minutes)) min → jumped in the way"), antic: true)
             speak(Lines.voiceBlock(app: d.app))
             return
         }
@@ -652,12 +753,12 @@ final class Brain: ObservableObject {
                 BubbleAction(title: L("Nghỉ xíu thôi (10')", "Just a quick break (10')")) { [weak self] in
                     self?.distractionSnoozedUntil = Date().addingTimeInterval(600)
                 },
-            ], seconds: 30))
+            ], seconds: 30), why: L("ở \(d.app) \(Int(d.minutes)) phút trong giờ làm", "on \(d.app) for \(Int(d.minutes)) min during work hours"))
             return
         }
 
         if ctx.night, DayMath.hour(now) >= 23, once("night-\(dayKey)") {
-            say(Bubble(text: Lines.lateNight(), seconds: 10))
+            say(Bubble(text: Lines.lateNight(), seconds: 10), why: L("đã quá 23 giờ mà bạn vẫn dùng máy", "past 11pm and you're still at it"))
             return
         }
 
@@ -667,17 +768,41 @@ final class Brain: ObservableObject {
             recompute()
             say(Bubble(text: Lines.allDone(), actions: [
                 BubbleAction(title: L("＋ Việc cho mai", "＋ Plan tomorrow")) { [weak self] in self?.openBoard?(true) },
-            ], seconds: 20))
+            ], seconds: 20), why: L("xong hết việc hôm nay", "everything for today is done"))
             return
         }
 
         // Calm: everything below can wait. Never during deep work, only at a natural pause
         // (a typing break or an app switch), and at most one unsolicited bubble per `bubbleGap` minutes.
-        if flow { return }
-        guard CalmRules.atBreakpoint(secondsSinceKey: CalmRules.secondsSinceKey(),
-                                     secondsSinceAppSwitch: now.timeIntervalSince(lastAppSwitch)),
-              CalmRules.withinBudget(lastBubbleAt: lastBubbleAt, now: now, minGap: Double(prefs.bubbleGap))
-        else { return }
+        // Held reminders are written to the diary so the thresholds can be tuned.
+        let somethingDue = ctx.inWork && (
+            (day.planned < target && ctx.hoursAfterPlanDeadline >= 0 && isDue("plan", minutes: 30))
+                || (day.next != nil && now.timeIntervalSince(lastBubbleAt) > Double(prefs.remindEvery) * 60
+                    && isDue("nudge", minutes: Double(prefs.remindEvery)))
+                || stuck.contains { fired["stuck-\($0.task.id)-\(dayKey)"] == nil }
+                || (life.state.hungry && isDue("hungry", minutes: 60)))
+        if flow {
+            if somethingDue {
+                log.add(.hold, L("Có lời nhắc đến hạn nhưng bạn đang vào guồng — để sau", "A reminder is due but you're in the zone — later"),
+                        throttle: "hold-flow", every: 15)
+            }
+            return
+        }
+        if !CalmRules.atBreakpoint(secondsSinceKey: CalmRules.secondsSinceKey(), secondsSinceAppSwitch: now.timeIntervalSince(lastAppSwitch)) {
+            if somethingDue {
+                log.add(.hold, L("Hoãn nhắc vì bạn đang gõ phím — chờ bạn ngừng tay", "Held a reminder: you're typing — waiting for a pause"),
+                        throttle: "hold-typing", every: 10)
+            }
+            return
+        }
+        if !CalmRules.withinBudget(lastBubbleAt: lastBubbleAt, now: now, minGap: Double(prefs.bubbleGap)) {
+            if somethingDue {
+                log.add(.hold, L("Hoãn nhắc: lần nhắc trước lúc \(DayMath.timeString(lastBubbleAt)), cần cách ít nhất \(prefs.bubbleGap) phút",
+                                 "Held a reminder: last one at \(DayMath.timeString(lastBubbleAt)), at least \(prefs.bubbleGap) min apart"),
+                        throttle: "hold-gap", every: 10)
+            }
+            return
+        }
 
         guard ctx.workday else { return }
 
@@ -696,13 +821,16 @@ final class Brain: ObservableObject {
             if life.state.streak > 0 { text += "\n" + Lines.streak(life.state.streak) }
             say(Bubble(text: text,
                        actions: needsPlan ? planActions() : (day.next.map { [focusAction($0), laterAction()] } ?? []),
-                       seconds: 60))
+                       seconds: 60),
+                why: L("lời chào đầu ngày làm việc", "first greeting of the workday")
+                    + (needsPlan ? L(", mới có \(day.planned)/\(target) việc", ", only \(day.planned)/\(target) planned") : ""))
             return
         }
 
         // 4. Not planned enough: nag every 30 minutes once the planning deadline passed.
         if ctx.inWork, day.planned < target, ctx.hoursAfterPlanDeadline >= 0, every("plan", minutes: 30) {
-            say(Bubble(text: Lines.plan(mood: mood, planned: day.planned, target: target), actions: planActions(), seconds: 60))
+            say(Bubble(text: Lines.plan(mood: mood, planned: day.planned, target: target), actions: planActions(), seconds: 60),
+                why: L("đã qua \(prefs.planDeadline)h mà mới có \(day.planned)/\(target) việc", "past \(prefs.planDeadline):00 with only \(day.planned)/\(target) planned"))
             return
         }
 
@@ -713,14 +841,16 @@ final class Brain: ObservableObject {
                 BubbleAction(title: L("✂️ Chia nhỏ", "✂️ Split it"), primary: true) { [weak self] in self?.openBreakdown?(s.task) },
                 BubbleAction(title: L("Bỏ khỏi kế hoạch", "Drop from plan")) { [weak self] in self?.unplan(s.task) },
                 laterAction(),
-            ], seconds: 60))
+            ], seconds: 60), why: L("“\(TextClean.short(s.task.title, 30))” nằm trong danh sách \(s.days) ngày",
+                                    "“\(TextClean.short(s.task.title, 30))” has been on your list \(s.days) days"))
             return
         }
 
         // 6b. A hungry pet begs for a finished task.
         if ctx.inWork, life.state.hungry, every("hungry", minutes: 60) {
             say(Bubble(text: Lines.hungry(life.state.satiety, next: day.next),
-                       actions: day.next.map { [focusAction($0), laterAction()] } ?? [], seconds: 30))
+                       actions: day.next.map { [focusAction($0), laterAction()] } ?? [], seconds: 30),
+                why: L("độ no còn \(Int(life.state.satiety))%", "only \(Int(life.state.satiety))% full"))
             speak(Lines.voiceHungry())
             return
         }
@@ -731,13 +861,17 @@ final class Brain: ObservableObject {
             if let a = angrySince, now.timeIntervalSince(a) >= 10 * 60, every("antic", minutes: 20) {
                 antic = AnticEvent(kind: .parade(next.title), start: now)
                 say(Bubble(text: Lines.parade(next), actions: [focusAction(next), spareAction()], seconds: 25, urgent: true),
-                    chime: .grumble)
+                    chime: .grumble, why: L("đã cáu \(Int(now.timeIntervalSince(a) / 60)) phút, không gõ phím → diễu hành với biển",
+                                            "grumpy for \(Int(now.timeIntervalSince(a) / 60)) min, not typing → sign parade") + reasonSuffix(),
+                    antic: true)
                 speak(Lines.voiceAngry(next))
                 return
             }
             if let a = annoyedSince, now.timeIntervalSince(a) >= 10 * 60, every("grumble", minutes: 30) {
                 antic = AnticEvent(kind: .grumble, start: now)
-                say(Bubble(text: Lines.grumble(next), actions: [focusAction(next), spareAction()], seconds: 15), chime: .grumble)
+                say(Bubble(text: Lines.grumble(next), actions: [focusAction(next), spareAction()], seconds: 15), chime: .grumble,
+                    why: L("đã nhăn nhó \(Int(now.timeIntervalSince(a) / 60)) phút", "annoyed for \(Int(now.timeIntervalSince(a) / 60)) min")
+                        + reasonSuffix(), antic: true)
                 speak(Lines.voiceGrumble())
                 return
             }
@@ -748,7 +882,7 @@ final class Brain: ObservableObject {
             say(Bubble(text: Lines.overdue(mood: mood, count: day.overdue.count), actions: [
                 BubbleAction(title: L("Dời vào hôm nay", "Move to today"), primary: true) { [weak self] in self?.pullOverdueToToday() },
                 BubbleAction(title: L("Xem", "Show")) { [weak self] in self?.openBoard?(false) },
-            ], seconds: 45))
+            ], seconds: 45), why: L("\(day.overdue.count) việc quá hạn (nhắc tối đa 90 phút/lần)", "\(day.overdue.count) overdue task(s) (at most every 90 min)"))
             return
         }
 
@@ -758,7 +892,7 @@ final class Brain: ObservableObject {
             say(Bubble(text: Lines.timeBlock(s), actions: [
                 BubbleAction(title: L("⏰ Đặt giờ", "⏰ Set time"), primary: true) { [weak self] in self?.schedule(s) },
                 laterAction(),
-            ], seconds: 60))
+            ], seconds: 60), why: L("gợi ý khung giờ trống (mỗi ngày một lần)", "a free time slot (once a day)"))
             return
         }
 
@@ -767,13 +901,14 @@ final class Brain: ObservableObject {
             say(Bubble(text: Lines.review(completed: day.completed.count, planned: day.planned, remaining: day.remaining), actions: [
                 BubbleAction(title: L("Dời sang mai", "Move to tomorrow"), primary: true) { [weak self] in self?.moveTodayToTomorrow() },
                 BubbleAction(title: L("Làm tiếp", "Keep going")) {},
-            ], seconds: 90))
+            ], seconds: 90), why: L("30 phút trước giờ tan làm, còn \(day.remaining) việc", "30 min before work ends, \(day.remaining) left"))
             return
         }
 
         // 9b. A sulky end-of-day report on time spent in distracting apps and sites.
         if ctx.inWork, now >= ctx.reviewTime, life.state.distractionTotal >= 10 * 60, once("distractsum-\(dayKey)") {
-            say(Bubble(text: Lines.distractionSummary(life.state.distraction), seconds: 25))
+            say(Bubble(text: Lines.distractionSummary(life.state.distraction), seconds: 25),
+                why: L("cuối ngày, xao nhãng \(Int(life.state.distractionTotal / 60)) phút", "end of day, \(Int(life.state.distractionTotal / 60)) min of distractions"))
             speak(Lines.voiceSummary(minutes: Int(life.state.distractionTotal / 60)))
             return
         }
@@ -783,15 +918,28 @@ final class Brain: ObservableObject {
         if ctx.inWork, let next = day.next, now.timeIntervalSince(lastBubbleAt) > minutes * 60, every("nudge", minutes: minutes) {
             let idleHours = now.timeIntervalSince(lastProgress) / 3600
             say(Bubble(text: Lines.nudge(mood: mood, next: next, hoursIdle: idleHours),
-                       actions: [focusAction(next), completeAction(next), laterAction()], seconds: 45))
+                       actions: [focusAction(next), completeAction(next), laterAction()], seconds: 45),
+                why: L("\(prefs.remindEvery) phút chưa nhắc; \(String(format: "%.1f", idleHours)) giờ chưa có tiến triển",
+                       "\(prefs.remindEvery) min since the last reminder; no progress for \(String(format: "%.1f", idleHours))h"))
             return
         }
 
         // 11. A tip now and then, only when the mood is good.
         if ctx.inWork, mood == .happy || mood == .normal, now.timeIntervalSince(lastBubbleAt) > 40 * 60,
            every("tip", minutes: 150) {
-            say(Bubble(text: Lines.tip(), seconds: 14))
+            say(Bubble(text: Lines.tip(), seconds: 14), why: L("pet đang vui và đã im lặng 40 phút", "the pet is in a good mood and quiet for 40 min"))
         }
+    }
+
+    /// Without setting it: has `key` not fired for `minutes`?
+    private func isDue(_ key: String, minutes: Double) -> Bool {
+        fired[key].map { Date().timeIntervalSince($0) >= minutes * 60 } ?? true
+    }
+
+    /// " (−30 only 1/3 planned; −10 no progress…)" — the top reasons behind the current mood.
+    private func reasonSuffix() -> String {
+        let r = reasons.filter { $0.delta < 0 }.prefix(2).map { "\($0.delta) \($0.text)" }.joined(separator: "; ")
+        return r.isEmpty ? "" : " (\(r))"
     }
 
     private func planActions() -> [BubbleAction] {
@@ -828,6 +976,14 @@ final class Brain: ObservableObject {
         }
         guard let r = result else { return }
         celebration = CelebrationEvent(kind: r.kind, food: r.food, golden: r.golden, combo: r.combo, start: now)
+        var fed = L("Xong “\(TextClean.short(task?.title ?? "", 40))”\(viaPet ? "" : " (trong Todoist)") → no \(Int(life.state.satiety))%, \(life.state.xp) XP",
+                    "Done “\(TextClean.short(task?.title ?? "", 40))”\(viaPet ? "" : " (in Todoist)") → \(Int(life.state.satiety))% full, \(life.state.xp) XP")
+        if feeds > 1 { fed += L(" (\(feeds) việc)", " (\(feeds) tasks)") }
+        if r.combo >= 2 { fed += ", combo ×\(r.combo)" }
+        if r.golden { fed += L(", bánh vàng hiếm", ", rare golden treat") }
+        if let levelUp { fed += L(", lớn lên thành \(levelUp.name)", ", grew up: \(levelUp.name)") }
+        if !unlocked.isEmpty { fed += L(", mở khoá ", ", unlocked ") + unlocked.map(\.emoji).joined() }
+        log.add(.life, fed)
         celebrateUntil = now.addingTimeInterval(r.golden || levelUp != nil ? 5 : 4)
         recompute()
         play(r.golden || levelUp != nil ? .big : .celebrate)
@@ -1041,6 +1197,8 @@ final class Brain: ObservableObject {
         recompute()
         bubble = Bubble(text: Lines.focusStart(t, minutes: m), seconds: 5)
         lastBubbleAt = now
+        log.add(.focus, L("Bắt đầu tập trung \(m) phút", "Started a \(m)-minute focus session")
+                    + (t.map { ": “\(TextClean.short($0.title, 40))”" } ?? ""))
     }
 
     func startBreak() {
@@ -1049,15 +1207,22 @@ final class Brain: ObservableObject {
         focus = FocusSession(task: nil, start: now, end: now.addingTimeInterval(Double(m) * 60), isBreak: true, minutes: m)
         recompute()
         bubble = Bubble(text: L("Nghỉ \(m) phút nhé ☕ Uống nước, vươn vai đi!", "\(m)-minute break ☕ Water and stretch!"), seconds: 6)
+        log.add(.focus, L("Nghỉ \(m) phút", "\(m)-minute break"))
     }
 
     func stopFocus() {
+        if let f = focus {
+            let minutes = Int(Date().timeIntervalSince(f.start) / 60)
+            log.add(.focus, f.isBreak ? L("Bạn dừng giờ nghỉ sau \(minutes) phút", "You ended the break after \(minutes) min")
+                                      : L("Bạn dừng tập trung sau \(minutes)/\(f.minutes) phút", "You stopped focusing after \(minutes)/\(f.minutes) min"))
+        }
         focus = nil
         recompute()
     }
 
     private func finishFocus() {
         guard let f = focus else { return }
+        log.add(.focus, f.isBreak ? L("Hết giờ nghỉ", "Break over") : L("Xong phiên tập trung \(f.minutes) phút", "Finished a \(f.minutes)-minute focus session"))
         focus = nil
         recompute()
         play(.important)

@@ -220,6 +220,32 @@ enum DevTools {
               && CalmRules.withinBudget(lastBubbleAt: t0, now: t0.addingTimeInterval(16 * 60), minGap: 15), "bubbles spaced out")
         check(CalmRules.secondsSinceKey() >= 0, "typing pause readable without permissions")
 
+        // Pet diary.
+        let memo = PetLog(folder: nil, now: t0)
+        memo.add(.bubble, "a", now: t0)
+        memo.add(.response, "b", tag: "ignored", now: t0)
+        memo.add(.hold, "c", throttle: "h", every: 10, now: t0)
+        memo.add(.hold, "c", throttle: "h", every: 10, now: t0.addingTimeInterval(120))
+        memo.add(.flow, "d", tag: "flowEnd", minutes: 30, now: t0)
+        let sum = LogSummary(memo.today)
+        check(memo.today.count == 4 && sum.bubbles == 1 && sum.ignored == 1 && sum.holds == 1 && sum.flowMinutes == 30,
+              "diary entries, throttling and summary")
+        memo.add(.system, "next day", now: t0.addingTimeInterval(86_400))
+        check(memo.today.count == 1, "diary starts fresh on a new day")
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("todopet-log-test-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let oldDay = DayMath.key(t0.addingTimeInterval(-20 * 86_400))
+        try? Data("{}\n".utf8).write(to: dir.appendingPathComponent("\(oldDay).jsonl"))
+        let disk = PetLog(folder: dir, now: t0)
+        disk.add(.bubble, "“Viết báo cáo” — vì 45 phút", now: t0)
+        disk.add(.response, "Bạn bấm “Để sau”", tag: "picked", now: t0.addingTimeInterval(30))
+        let reread = PetLog(folder: dir, now: t0)
+        check(reread.today.map(\.text) == ["“Viết báo cáo” — vì 45 phút", "Bạn bấm “Để sau”"], "diary saved to disk and read back")
+        check(!FileManager.default.fileExists(atPath: dir.appendingPathComponent("\(oldDay).jsonl").path), "diary files older than 14 days removed")
+        let exported = PetLog.export(reread.today, day: DayMath.key(t0))
+        check(exported.hasPrefix("TodoPet") && exported.contains("💬 “Viết báo cáo”"), "diary export for copying")
+
         // Language switch.
         let saved = currentLang
         currentLang = .en
@@ -297,6 +323,32 @@ enum DevTools {
                 BubbleAction(title: L("Tha cho tôi 15'", "Spare me 15'")) {},
             ])
             saveView(BubbleView(model: model), .aqua, url.appendingPathComponent("bubble-block.png"))
+
+            // A sample diary for the docs.
+            let base = DayMath.at(hour: 9, on: Date())
+            func at(_ minutes: Double) -> Date { base.addingTimeInterval(minutes * 60) }
+            let next = brain.day.next?.title ?? "Report"
+            let sample: [(Double, LogEntry.Kind, String, String?, Int?)] = [
+                (0, .bubble, L("“Chào buổi sáng! ☀️ Hôm nay mình làm 3 việc gì nào?” — vì lời chào đầu ngày làm việc, mới có 2/3 việc",
+                               "“Good morning! ☀️ What are our 3 things today?” — because first greeting of the workday, only 2/3 planned"), nil, nil),
+                (1, .response, L("Bạn bấm “＋ Thêm việc”", "You tapped “＋ Add tasks”"), "picked", nil),
+                (12, .flow, L("Bạn vào guồng (gõ phím đều 10 phút) — pet giữ im lặng", "You're in the zone (10 minutes of steady typing) — the pet stays quiet"), "flowStart", nil),
+                (40, .hold, L("Có lời nhắc đến hạn nhưng bạn đang vào guồng — để sau", "A reminder is due but you're in the zone — later"), nil, nil),
+                (64, .flow, L("Hết guồng sau 52 phút", "Left the zone after 52 minutes"), "flowEnd", 52),
+                (65, .life, L("Xong “\(next)” → no 95%, 345 XP, combo ×2", "Done “\(next)” → 95% full, 345 XP, combo ×2"), nil, nil),
+                (90, .distraction, L("Đang ở youtube.com hơn 2 phút", "On youtube.com for 2+ minutes"), nil, nil),
+                (91, .bubble, L("“Ê! Đang youtube.com đó hả? 👀” — vì ở youtube.com 2 phút trong giờ làm",
+                                "“Hey! On youtube.com? 👀” — because on youtube.com for 2 min during work hours"), nil, nil),
+                (91.8, .response, L("Bạn không phản hồi (tự ẩn)", "No response (faded away)"), "ignored", nil),
+                (98, .distraction, L("Rời youtube.com sau 8 phút", "Left youtube.com after 8 minutes"), "end", 8),
+                (99, .mood, L("Tâm trạng: bình thường → đang nhăn nhó (điểm 41) — −21 đang xao nhãng với youtube.com",
+                              "Mood: chill → annoyed (score 41) — −21 distracted by youtube.com"), nil, nil),
+            ]
+            for (m, kind, text, tag, minutes) in sample { brain.log.add(kind, text, tag: tag, minutes: minutes, now: at(m)) }
+            let logState = BoardState()
+            logState.showLog = true
+            saveView(BoardView(brain: brain, prefs: prefs, state: logState).background(Color(nsColor: .windowBackgroundColor)), .aqua,
+                     url.appendingPathComponent("diary.png"))
 
             defaults.removePersistentDomain(forName: suite)
             print("Snapshots written to \(url.path)")

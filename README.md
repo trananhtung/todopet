@@ -158,6 +158,18 @@ A reminder app that interrupts deep work does more harm than good, so the pet fo
 
 Sounds have three levels in Settings: **Off**, **Important only** (default) and **Everything**.
 
+### The pet diary
+
+To tune all of this to how you actually work, the pet keeps a diary (the 📜 button on the board, or the menu bar). It records:
+- every reminder and the reason it fired
+- what you did with it (tapped a button, closed it, or let it fade)
+- every reminder it held back (you were in the zone, typing, or it had spoken recently)
+- meetings, focus sessions, mood changes with their top reasons, time on distracting sites, feedings and the end-of-day settlement
+
+A summary line shows how many reminders you got and how many you ignored. **Copy** puts the whole day on the clipboard, so you can paste it into Claude and ask for adjustments. The diary stays on your Mac (`~/Library/Application Support/TodoPet/log`), keeps 14 days, and can be turned off in Settings.
+
+![Pet diary](docs/diary.png)
+
 ## Why these features
 
 The behavior is based on well-known productivity practices, kept deliberately simple:
@@ -207,6 +219,7 @@ build/TodoPet.app/Contents/MacOS/TodoPet --snapshot out/  # render moods, board 
 | `Antics.swift` | Mischief types, the dragged sign, spoken lines |
 | `LifeViews.swift` | Life bar and wardrobe & achievements view |
 | `Calm.swift` | When it's OK to interrupt: typing pauses, deep-work detection, bubble spacing |
+| `PetLog.swift` / `LogView.swift` | The pet diary: entries, daily files, summary, viewer |
 | `PetArt.swift` | The pet, drawn in code for every mood |
 | `PetWindow.swift` | Floating window, walking, drag and drop |
 | `Bubble.swift` / `BoardView.swift` / `SettingsView.swift` | UI |

@@ -158,6 +158,18 @@ Một app nhắc việc mà cắt ngang lúc bạn đang tập trung thì hại 
 
 Âm thanh có 3 mức trong Cài đặt: **Tắt**, **Chỉ khi quan trọng** (mặc định) và **Tất cả**.
 
+### Nhật ký pet
+
+Để chỉnh mọi thứ cho hợp với cách bạn thực sự làm việc, pet ghi nhật ký (nút 📜 trên bảng việc, hoặc trên thanh menu). Nhật ký ghi lại:
+- mỗi lời nhắc và lý do pet nhắc
+- bạn đã làm gì với lời nhắc đó (bấm nút nào, tự đóng, hay để nó tự ẩn)
+- mỗi lần pet hoãn nhắc (bạn đang vào guồng, đang gõ phím, hoặc pet vừa nhắc gần đây)
+- cuộc họp, phiên tập trung, lúc tâm trạng đổi kèm lý do chính, thời gian ở trang gây xao nhãng, lúc pet được ăn và kết quả chốt ngày
+
+Dòng tóm tắt cho biết bạn nhận bao nhiêu lời nhắc và bỏ qua bao nhiêu. Nút **Sao chép** chép cả ngày, để bạn dán cho Claude và nhờ chỉnh lại. Nhật ký chỉ nằm trên máy bạn (`~/Library/Application Support/TodoPet/log`), giữ 14 ngày, và tắt được trong Cài đặt.
+
+![Nhật ký pet](docs/diary-vi.png)
+
 ## Vì sao có những tính năng này
 
 Hành vi của pet dựa trên các phương pháp năng suất phổ biến, cố tình giữ đơn giản:

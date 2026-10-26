@@ -58,6 +58,7 @@ struct SettingsView: View {
                 Text(L("Lời nhắc không gấp chỉ hiện khi bạn ngừng gõ một chút hoặc chuyển app. Nhắc họp và việc tới giờ luôn hiện đúng lúc.",
                        "Non-urgent reminders wait until you pause typing or switch apps. Meeting and due-time reminders always arrive on time."))
                     .font(.caption).foregroundColor(.secondary)
+                Toggle(L("Ghi nhật ký pet (chỉ trên máy này, giữ 14 ngày)", "Keep the pet diary (this Mac only, 14 days)"), isOn: $prefs.keepLog)
             }
 
             Section("Todoist") {

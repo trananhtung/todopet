@@ -7,6 +7,8 @@ final class BoardState: ObservableObject {
     @Published var breakdown: TodoTask?
     /// Shows the wardrobe & achievements view.
     @Published var wardrobe = false
+    /// Shows the pet's diary.
+    @Published var showLog = false
 }
 
 enum PriorityStyle {
@@ -57,7 +59,9 @@ struct BoardView: View {
             header
             if brain.hasToken { LifeBar(life: life, state: state) }
             Divider()
-            if brain.hasToken, state.wardrobe {
+            if state.showLog {
+                LogView(log: brain.log, state: state)
+            } else if brain.hasToken, state.wardrobe {
                 WardrobeView(life: life, state: state, mood: brain.mood)
             } else if brain.hasToken, let task = state.breakdown {
                 BreakdownView(task: task, brain: brain, state: state)
@@ -215,6 +219,8 @@ struct BoardView: View {
                 .help(L("Làm mới", "Refresh"))
             Button { openTodoist() } label: { Image(systemName: "checklist") }
                 .help(L("Mở Todoist", "Open Todoist"))
+            Button { state.showLog.toggle() } label: { Image(systemName: "list.bullet.rectangle") }
+                .help(L("Nhật ký pet: vì sao pet nhắc, cáu hay im lặng", "Pet diary: why the pet spoke up, got grumpy or stayed quiet"))
             Button { brain.openSettings?() } label: { Image(systemName: "gearshape") }
                 .help(L("Cài đặt", "Settings"))
         }
@@ -504,6 +510,7 @@ final class BoardController: NSObject, NSPopoverDelegate {
         MainActor.assumeIsolated {
             state.breakdown = nil
             state.wardrobe = false
+            state.showLog = false
             onShownChanged?(false)
         }
     }
