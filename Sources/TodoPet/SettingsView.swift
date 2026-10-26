@@ -25,7 +25,12 @@ struct SettingsView: View {
                     Slider(value: $prefs.petScale, in: 0.7...1.6, step: 0.1)
                     Text(String(format: "%.0f%%", prefs.petScale * 100)).monospacedDigit().frame(width: 44, alignment: .trailing)
                 }
-                Toggle(L("Âm thanh", "Sounds"), isOn: $prefs.soundOn)
+                Picker(L("Âm thanh", "Sounds"), selection: $prefs.soundMode) {
+                    ForEach(SoundMode.allCases) { Text($0.label).tag($0) }
+                }
+                Text(L("“Chỉ khi quan trọng”: kêu khi sắp họp, việc tới giờ, hết phiên tập trung và lúc ăn mừng xong việc; bong bóng thường im lặng.",
+                       "“Important only”: chimes for meetings, tasks due now, the end of a focus session and finished tasks; ordinary bubbles stay silent."))
+                    .font(.caption).foregroundColor(.secondary)
                 Toggle(L("Khi nổi cáu thì đuổi theo con trỏ chuột", "Chase the mouse cursor when grumpy"), isOn: $prefs.chaseWhenAngry)
                 Toggle(L("Quậy khi bạn lười (càu nhàu, diễu hành với biển, đứng chắn màn hình)",
                          "Mischief when you slack (grumbling, sign parade, standing in the way)"), isOn: $prefs.antics)
@@ -42,6 +47,17 @@ struct SettingsView: View {
                             launchAtLogin = SMAppService.mainApp.status == .enabled
                         }
                     }
+            }
+
+            Section(L("Không làm bạn mất tập trung", "Don't break my focus")) {
+                Toggle(L("Bảo vệ lúc đang vào guồng: gõ phím liên tục 10 phút thì pet im lặng 🎧",
+                         "Protect deep work: after 10 minutes of steady typing the pet stays quiet 🎧"), isOn: $prefs.protectFlow)
+                Toggle(L("Pet đứng yên, cử động nhẹ khi bạn đang gõ phím", "Pet keeps still while you type"), isOn: $prefs.stillWhileTyping)
+                Stepper(L("Cách nhau ít nhất \(prefs.bubbleGap) phút giữa hai lời nhắc", "At least \(prefs.bubbleGap) minutes between reminders"),
+                        value: $prefs.bubbleGap, in: 5...60, step: 5)
+                Text(L("Lời nhắc không gấp chỉ hiện khi bạn ngừng gõ một chút hoặc chuyển app. Nhắc họp và việc tới giờ luôn hiện đúng lúc.",
+                       "Non-urgent reminders wait until you pause typing or switch apps. Meeting and due-time reminders always arrive on time."))
+                    .font(.caption).foregroundColor(.secondary)
             }
 
             Section("Todoist") {

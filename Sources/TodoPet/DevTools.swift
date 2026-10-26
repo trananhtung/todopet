@@ -204,6 +204,22 @@ enum DevTools {
         i.dirt = 3
         check(MoodEngine.evaluate(i).mood == .annoyed, "starving and dirty pet is annoyed")
 
+        // Calm: interruptions wait for a pause and never break deep work.
+        check(CalmRules.engaged(secondsSinceKey: 5, idleSeconds: 5, distracted: false), "typing in a work app = engaged")
+        check(!CalmRules.engaged(secondsSinceKey: 5, idleSeconds: 5, distracted: true), "typing on a distracting site isn't work")
+        let start = CalmRules.engagedSince(nil, engaged: true, secondsSinceKey: 3, now: t0)
+        check(start == t0 && CalmRules.engagedSince(start, engaged: false, secondsSinceKey: 60, now: t0) == t0,
+              "a short pause keeps the streak of work")
+        check(CalmRules.engagedSince(start, engaged: false, secondsSinceKey: 200, now: t0) == nil, "two minutes without typing ends it")
+        check(!CalmRules.inFlow(engagedSince: t0, now: t0.addingTimeInterval(9 * 60))
+              && CalmRules.inFlow(engagedSince: t0, now: t0.addingTimeInterval(10 * 60)), "10 minutes of steady work = in the zone")
+        check(!CalmRules.atBreakpoint(secondsSinceKey: 2, secondsSinceAppSwitch: 300), "mid-typing is not a good moment")
+        check(CalmRules.atBreakpoint(secondsSinceKey: 12, secondsSinceAppSwitch: 300)
+              && CalmRules.atBreakpoint(secondsSinceKey: 2, secondsSinceAppSwitch: 3), "a typing pause or an app switch is")
+        check(!CalmRules.withinBudget(lastBubbleAt: t0, now: t0.addingTimeInterval(10 * 60), minGap: 15)
+              && CalmRules.withinBudget(lastBubbleAt: t0, now: t0.addingTimeInterval(16 * 60), minGap: 15), "bubbles spaced out")
+        check(CalmRules.secondsSinceKey() >= 0, "typing pause readable without permissions")
+
         // Language switch.
         let saved = currentLang
         currentLang = .en

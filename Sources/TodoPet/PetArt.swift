@@ -14,6 +14,9 @@ struct PetPose {
     /// 0 → colors of `prevMood`, 1 → colors of `mood`.
     var blend: Double = 1
 
+    /// You're typing or in the zone: keep movements small.
+    var calm = false
+
     // Life: growth, hunger, dirt, accessories.
     var stageScale: Double = 1
     var sprouts = 0
@@ -144,6 +147,12 @@ enum PetArt {
         case .sleeping:
             breathe = CGFloat(sin(t * 1.3)) * 0.04
             squash = 0.06
+        }
+        if p.calm && !celebrating {
+            // Motion at the edge of your vision pulls attention: tone it down while you work.
+            jump *= 0.3
+            squash *= 0.5
+            shakeX *= 0.2
         }
         if p.held {
             jump = 0

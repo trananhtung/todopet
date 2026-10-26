@@ -1,6 +1,25 @@
 import Foundation
 import Combine
 
+enum SoundMode: String, CaseIterable, Identifiable {
+    /// Silent.
+    case off
+    /// Meetings, tasks due now, end of focus, and finished tasks; ordinary bubbles stay silent.
+    case important
+    /// Every bubble and every grumble.
+    case all
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .off: L("Tắt", "Off")
+        case .important: L("Chỉ khi quan trọng", "Important only")
+        case .all: L("Tất cả", "Everything")
+        }
+    }
+}
+
 /// User preferences, persisted in UserDefaults. The Todoist token lives in the Keychain instead.
 final class Prefs: ObservableObject {
     static let shared = Prefs()
@@ -21,7 +40,7 @@ final class Prefs: ObservableObject {
     @Published var filterQuery: String { didSet { d.set(filterQuery, forKey: "filterQuery") } }
     /// Comma-separated app names that count as distractions.
     @Published var distractionApps: String { didSet { d.set(distractionApps, forKey: "distractionApps") } }
-    @Published var soundOn: Bool { didSet { d.set(soundOn, forKey: "soundOn") } }
+    @Published var soundMode: SoundMode { didSet { d.set(soundMode.rawValue, forKey: "soundMode") } }
     @Published var workSaturday: Bool { didSet { d.set(workSaturday, forKey: "workSaturday") } }
     @Published var workSunday: Bool { didSet { d.set(workSunday, forKey: "workSunday") } }
     @Published var petScale: Double { didSet { d.set(petScale, forKey: "petScale") } }
@@ -41,6 +60,12 @@ final class Prefs: ObservableObject {
     @Published var antics: Bool { didSet { d.set(antics, forKey: "antics") } }
     /// Say some lines out loud with a macOS voice.
     @Published var voiceOn: Bool { didSet { d.set(voiceOn, forKey: "voiceOn") } }
+    /// Hold non-urgent bubbles while you're typing steadily ("in the zone").
+    @Published var protectFlow: Bool { didSet { d.set(protectFlow, forKey: "protectFlow") } }
+    /// Keep the pet still (no walking, small movements) while you type.
+    @Published var stillWhileTyping: Bool { didSet { d.set(stillWhileTyping, forKey: "stillWhileTyping") } }
+    /// Minimum minutes between two unsolicited bubbles.
+    @Published var bubbleGap: Int { didSet { d.set(bubbleGap, forKey: "bubbleGap") } }
 
     /// First time the app ever ran; used so day one doesn't start with a grumpy pet.
     let firstLaunch: Date
@@ -60,6 +85,7 @@ final class Prefs: ObservableObject {
             "useCalendar": true, "adaptTarget": true, "meetingLead": 5, "stuckDays": 3,
             "claudeModel": ClaudeClient.defaultModel,
             "antics": true, "voiceOn": false,
+            "protectFlow": true, "stillWhileTyping": true, "bubbleGap": 15,
         ])
         lang = Lang(rawValue: d.string(forKey: "lang") ?? "") ?? .systemDefault
         petName = d.string(forKey: "petName") ?? "Mochi"
@@ -72,7 +98,8 @@ final class Prefs: ObservableObject {
         breakMinutes = d.integer(forKey: "breakMinutes")
         filterQuery = d.string(forKey: "filterQuery") ?? Prefs.defaultFilter
         distractionApps = d.string(forKey: "distractionApps") ?? ""
-        soundOn = d.bool(forKey: "soundOn")
+        // Older versions had an on/off switch ("soundOn"); "on" becomes "important only".
+        soundMode = SoundMode(rawValue: d.string(forKey: "soundMode") ?? "") ?? (d.bool(forKey: "soundOn") ? .important : .off)
         workSaturday = d.bool(forKey: "workSaturday")
         workSunday = d.bool(forKey: "workSunday")
         petScale = d.double(forKey: "petScale")
@@ -86,6 +113,9 @@ final class Prefs: ObservableObject {
         claudeModel = d.string(forKey: "claudeModel") ?? ClaudeClient.defaultModel
         antics = d.bool(forKey: "antics")
         voiceOn = d.bool(forKey: "voiceOn")
+        protectFlow = d.bool(forKey: "protectFlow")
+        stillWhileTyping = d.bool(forKey: "stillWhileTyping")
+        bubbleGap = d.integer(forKey: "bubbleGap")
         if let f = d.object(forKey: "firstLaunch") as? Date {
             firstLaunch = f
         } else {

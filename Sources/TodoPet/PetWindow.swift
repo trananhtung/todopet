@@ -9,6 +9,8 @@ final class PetMotion {
     var lookX: CGFloat = 0
     var hovered = false
     var held = false
+    /// You're typing or in the zone: small movements, no walking.
+    var calm = false
     private var shownMood: Mood = .normal
     private var prevMood: Mood = .normal
     private var changedAt: Double = 0
@@ -19,8 +21,10 @@ final class PetMotion {
             shownMood = mood
             changedAt = t
         }
-        return PetPose(mood: mood, t: t, facing: facing, walking: walking, walkPhase: walkPhase, lookX: lookX,
-                       hovered: hovered, held: held, prevMood: prevMood, blend: min(1, (t - changedAt) / 0.8))
+        var pose = PetPose(mood: mood, t: t, facing: facing, walking: walking, walkPhase: walkPhase, lookX: lookX,
+                           hovered: hovered, held: held, prevMood: prevMood, blend: min(1, (t - changedAt) / 0.8))
+        pose.calm = calm
+        return pose
     }
 }
 
@@ -58,6 +62,13 @@ struct PetView: View {
                 }
                 if let f = brain.focus {
                     FocusChip(session: f, now: tl.date)
+                } else if brain.flow {
+                    Text("🎧")
+                        .font(.system(size: 11))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Capsule().fill(Color.black.opacity(0.35)))
+                        .help(L("Bạn đang vào guồng — mình giữ im lặng", "You're in the zone — I'll stay quiet"))
                 }
             }
         }
@@ -148,6 +159,7 @@ final class PetController {
     private let prefs: Prefs
     private var timer: Timer?
     private var last = CACurrentMediaTime()
+    private var lastCalmCheck: Double = 0
     private var x: CGFloat = 0
     private var y: CGFloat = 0
     private var vy: CGFloat = 0
@@ -288,6 +300,10 @@ final class PetController {
         let dt = min(0.1, now - last)
         last = now
         let mood = brain.mood
+        if now - lastCalmCheck > 0.5 {
+            lastCalmCheck = now
+            motion.calm = brain.calmMotion
+        }
         if abs(panel.frame.width - size) > 0.5 { applySize() }
 
         switch behavior {
@@ -306,7 +322,7 @@ final class PetController {
             motion.walking = false
             if now >= until && !paused && !motion.hovered { chooseNext(now, mood) }
         case .walk(let tx):
-            if paused || motion.hovered || speed(mood) == 0 {
+            if paused || motion.hovered || motion.calm || speed(mood) == 0 {
                 behavior = .idle(until: now + 0.6)
                 motion.walking = false
                 break
@@ -381,6 +397,11 @@ final class PetController {
     }
 
     private func chooseNext(_ now: Double, _ mood: Mood) {
+        // No wandering while you type: walking at the edge of the screen pulls your eyes away.
+        if motion.calm {
+            behavior = .idle(until: now + 2)
+            return
+        }
         let vf = screen.visibleFrame
         let minX = vf.minX + 10, maxX = vf.maxX - size - 10
         func clamp(_ v: CGFloat) -> CGFloat { min(max(v, minX), maxX) }

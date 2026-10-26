@@ -128,7 +128,16 @@ final class BubbleController {
         let size = host.fittingSize
         panel.setContentSize(size)
         place()
+        // Fade in gently instead of popping up: abrupt onsets grab attention the most.
+        let appearing = !panel.isVisible
+        if appearing { panel.alphaValue = 0 }
         panel.orderFrontRegardless()
+        if appearing {
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.35
+                panel.animator().alphaValue = 1
+            }
+        }
 
         hideWork?.cancel()
         let work = DispatchWorkItem(block: onDone)

@@ -68,6 +68,8 @@ final class Brain: ObservableObject {
     @Published private(set) var celebration: CelebrationEvent?
     /// Current mischief, performed by the pet window.
     @Published private(set) var antic: AnticEvent?
+    /// You've been typing steadily in work apps for a while: the pet holds everything non-urgent.
+    @Published private(set) var flow = false
     /// Hunger, dirt, growth, accessories: what the pet remembers across days.
     let life: PetLife
 
@@ -97,6 +99,14 @@ final class Brain: ObservableObject {
     private var anticSnoozedUntil = Date.distantPast
     private var annoyedSince: Date?
     private var angrySince: Date?
+    private var engagedSince: Date?
+    private var lastFlowEnd = Date.distantPast
+    private var lastAppSwitch = Date.distantPast
+
+    /// The pet should keep still: you're typing, in the zone, or in a meeting.
+    var calmMotion: Bool {
+        prefs.stillWhileTyping && (flow || CalmRules.secondsSinceKey() < 20 || CalendarMath.current(events, at: Date()) != nil)
+    }
     private var lastStatsAt = Date.distantPast
     private var timer: Timer?
     private var cancellables = Set<AnyCancellable>()
@@ -121,6 +131,7 @@ final class Brain: ObservableObject {
             let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
             MainActor.assumeIsolated {
                 self?.frontApp = (app?.localizedName ?? "", app?.bundleIdentifier ?? "", Date())
+                self?.lastAppSwitch = Date()
                 self?.browser.poll()
             }
         }
@@ -345,6 +356,8 @@ final class Brain: ObservableObject {
         var p = max(start, lastPlanAction, lastCelebration)
         if let latest = day.completed.compactMap(\.completedDate).max() { p = max(p, latest) }
         if let f = focus { p = max(p, min(now, f.start)) }
+        // Deep work counts as progress, even before a task gets ticked off.
+        p = max(p, flow ? now : lastFlowEnd)
         // Time in meetings counts as work.
         if let meetingEnd = events.filter({ $0.start <= now }).map({ min($0.end, now) }).max() { p = max(p, meetingEnd) }
         return p
@@ -459,11 +472,45 @@ final class Brain: ObservableObject {
 
     // MARK: - Talking
 
-    func say(_ b: Bubble) {
+    func say(_ b: Bubble, chime: Chime = .chatter) {
         if let cur = bubble, !cur.actions.isEmpty, !b.urgent, b.actions.isEmpty { return }
         bubble = b
         lastBubbleAt = Date()
-        if prefs.soundOn { NSSound(named: "Pop")?.play() }
+        play(chime)
+    }
+
+    enum Chime {
+        /// An ordinary bubble.
+        case chatter
+        /// A meeting or task time, the end of a focus session.
+        case important
+        /// A finished task.
+        case celebrate
+        /// A golden treat or growing up.
+        case big
+        /// Mischief.
+        case grumble
+    }
+
+    private var playing: NSSound?
+
+    /// Plays a soft system sound, if the sound setting allows this kind.
+    private func play(_ c: Chime) {
+        switch (prefs.soundMode, c) {
+        case (.off, _), (.important, .chatter), (.important, .grumble): return
+        default: break
+        }
+        let (name, volume): (String, Float) = switch c {
+        case .chatter: ("Pop", 0.2)
+        case .important: ("Tink", 0.4)
+        case .celebrate: ("Glass", 0.25)
+        case .big: ("Hero", 0.3)
+        case .grumble: ("Basso", 0.25)
+        }
+        guard let sound = NSSound(named: name)?.copy() as? NSSound else { return }
+        sound.volume = volume
+        sound.play()
+        playing = sound
     }
 
     private func once(_ key: String) -> Bool {
@@ -501,8 +548,21 @@ final class Brain: ObservableObject {
         }
         // Left the distracting app or site: the pet gets out of the way.
         if case .block? = antic?.kind, currentDistraction == nil { antic = nil }
+        updateFlow(now)
         recompute()
         runRules(now)
+    }
+
+    /// Tracks steady typing in work apps; ten minutes of it is "the zone".
+    private func updateFlow(_ now: Date) {
+        let sinceKey = CalmRules.secondsSinceKey()
+        let engaged = CalmRules.engaged(secondsSinceKey: sinceKey, idleSeconds: Brain.idleSeconds(), distracted: currentDistraction != nil)
+        engagedSince = CalmRules.engagedSince(engagedSince, engaged: engaged, secondsSinceKey: sinceKey, now: now)
+        let inFlow = prefs.protectFlow && hasToken && CalmRules.inFlow(engagedSince: engagedSince, now: now)
+        if flow != inFlow {
+            flow = inFlow
+            if !inFlow { lastFlowEnd = now }
+        }
     }
 
     private func focusAction(_ task: TodoTask?) -> BubbleAction {
@@ -536,7 +596,8 @@ final class Brain: ObservableObject {
                     actions.append(BubbleAction(title: L("Vào họp ↗", "Join ↗"), primary: true) { NSWorkspace.shared.open(url) })
                 }
                 actions.append(BubbleAction(title: "OK") {})
-                say(Bubble(text: Lines.meetingSoon(e, minutes: max(1, Int(mins.rounded(.up)))), actions: actions, seconds: 90, urgent: true))
+                say(Bubble(text: Lines.meetingSoon(e, minutes: max(1, Int(mins.rounded(.up)))), actions: actions, seconds: 90, urgent: true),
+                    chime: .important)
                 return
             }
         }
@@ -564,15 +625,36 @@ final class Brain: ObservableObject {
             let mins = time.timeIntervalSince(now) / 60
             if mins > 0, mins <= 10, once("soon-\(t.id)") {
                 say(Bubble(text: Lines.soon(t, minutes: Int(mins.rounded(.up))),
-                           actions: [focusAction(t), completeAction(t)], seconds: 40, urgent: true))
+                           actions: [focusAction(t), completeAction(t)], seconds: 40, urgent: true), chime: .important)
                 return
             }
             if mins <= 0, mins > -5, once("now-\(t.id)") {
-                say(Bubble(text: Lines.dueNow(t), actions: [focusAction(t), completeAction(t)], seconds: 60, urgent: true))
+                say(Bubble(text: Lines.dueNow(t), actions: [focusAction(t), completeAction(t)], seconds: 60, urgent: true),
+                    chime: .important)
                 return
             }
         }
         if bubble != nil { return }
+
+        // Distraction apps and sites come first: there's no concentration to protect right then.
+        // Grumpy and stuck on one for 5+ minutes: the pet jumps in the way.
+        if prefs.antics, ctx.inWork, mood == .angry, now > anticSnoozedUntil, day.open.count > 0, let d = distraction,
+           d.minutes >= 5, every("antic", minutes: 20) {
+            antic = AnticEvent(kind: .block, start: now)
+            say(Bubble(text: Lines.block(app: d.app, next: day.next), actions: [focusAction(day.next), spareAction()],
+                       seconds: 25, urgent: true), chime: .grumble)
+            speak(Lines.voiceBlock(app: d.app))
+            return
+        }
+        if ctx.inWork, day.open.count > 0, let d = distraction, d.minutes >= 2, every("distract", minutes: 10) {
+            say(Bubble(text: Lines.distraction(mood: mood, app: d.app, left: day.open.count, next: day.next), actions: [
+                focusAction(day.next),
+                BubbleAction(title: L("Nghỉ xíu thôi (10')", "Just a quick break (10')")) { [weak self] in
+                    self?.distractionSnoozedUntil = Date().addingTimeInterval(600)
+                },
+            ], seconds: 30))
+            return
+        }
 
         if ctx.night, DayMath.hour(now) >= 23, once("night-\(dayKey)") {
             say(Bubble(text: Lines.lateNight(), seconds: 10))
@@ -588,6 +670,14 @@ final class Brain: ObservableObject {
             ], seconds: 20))
             return
         }
+
+        // Calm: everything below can wait. Never during deep work, only at a natural pause
+        // (a typing break or an app switch), and at most one unsolicited bubble per `bubbleGap` minutes.
+        if flow { return }
+        guard CalmRules.atBreakpoint(secondsSinceKey: CalmRules.secondsSinceKey(),
+                                     secondsSinceAppSwitch: now.timeIntervalSince(lastAppSwitch)),
+              CalmRules.withinBudget(lastBubbleAt: lastBubbleAt, now: now, minGap: Double(prefs.bubbleGap))
+        else { return }
 
         guard ctx.workday else { return }
 
@@ -616,25 +706,6 @@ final class Brain: ObservableObject {
             return
         }
 
-        // 5. Distraction apps and sites. Grumpy and stuck on one for 5+ minutes: the pet jumps in the way.
-        if prefs.antics, ctx.inWork, mood == .angry, now > anticSnoozedUntil, day.open.count > 0, let d = distraction,
-           d.minutes >= 5, every("antic", minutes: 20) {
-            antic = AnticEvent(kind: .block, start: now)
-            say(Bubble(text: Lines.block(app: d.app, next: day.next), actions: [focusAction(day.next), spareAction()],
-                       seconds: 25, urgent: true))
-            speak(Lines.voiceBlock(app: d.app))
-            return
-        }
-        if ctx.inWork, day.open.count > 0, let d = distraction, d.minutes >= 2, every("distract", minutes: 10) {
-            say(Bubble(text: Lines.distraction(mood: mood, app: d.app, left: day.open.count, next: day.next), actions: [
-                focusAction(day.next),
-                BubbleAction(title: L("Nghỉ xíu thôi (10')", "Just a quick break (10')")) { [weak self] in
-                    self?.distractionSnoozedUntil = Date().addingTimeInterval(600)
-                },
-            ], seconds: 30))
-            return
-        }
-
         // 6. A task that keeps getting postponed: offer to split it (or drop it). Once per task per day.
         if ctx.inWork, let s = stuck.first(where: { fired["stuck-\($0.task.id)-\(dayKey)"] == nil }), every("stuck", minutes: 120) {
             fired["stuck-\(s.task.id)-\(dayKey)"] = now
@@ -655,17 +726,18 @@ final class Brain: ObservableObject {
         }
 
         // 6c. Mischief that escalates while you slack: grumbling, then a parade with the task on a sign.
-        if prefs.antics, ctx.inWork, now > anticSnoozedUntil, let next = day.next {
+        // Never while you're typing (that's work, even if no task got ticked off yet).
+        if prefs.antics, ctx.inWork, now > anticSnoozedUntil, CalmRules.secondsSinceKey() > 60, let next = day.next {
             if let a = angrySince, now.timeIntervalSince(a) >= 10 * 60, every("antic", minutes: 20) {
                 antic = AnticEvent(kind: .parade(next.title), start: now)
-                say(Bubble(text: Lines.parade(next), actions: [focusAction(next), spareAction()], seconds: 25, urgent: true))
+                say(Bubble(text: Lines.parade(next), actions: [focusAction(next), spareAction()], seconds: 25, urgent: true),
+                    chime: .grumble)
                 speak(Lines.voiceAngry(next))
                 return
             }
             if let a = annoyedSince, now.timeIntervalSince(a) >= 10 * 60, every("grumble", minutes: 30) {
                 antic = AnticEvent(kind: .grumble, start: now)
-                if prefs.soundOn { NSSound(named: "Basso")?.play() }
-                say(Bubble(text: Lines.grumble(next), actions: [focusAction(next), spareAction()], seconds: 15))
+                say(Bubble(text: Lines.grumble(next), actions: [focusAction(next), spareAction()], seconds: 15), chime: .grumble)
                 speak(Lines.voiceGrumble())
                 return
             }
@@ -758,7 +830,7 @@ final class Brain: ObservableObject {
         celebration = CelebrationEvent(kind: r.kind, food: r.food, golden: r.golden, combo: r.combo, start: now)
         celebrateUntil = now.addingTimeInterval(r.golden || levelUp != nil ? 5 : 4)
         recompute()
-        if prefs.soundOn { NSSound(named: r.golden || levelUp != nil ? "Hero" : "Glass")?.play() }
+        play(r.golden || levelUp != nil ? .big : .celebrate)
         var actions: [BubbleAction] = []
         if viaPet, let task {
             actions.append(BubbleAction(title: L("Hoàn tác", "Undo")) { [weak self] in self?.undoComplete(task) })
@@ -988,7 +1060,7 @@ final class Brain: ObservableObject {
         guard let f = focus else { return }
         focus = nil
         recompute()
-        if prefs.soundOn { NSSound(named: "Hero")?.play() }
+        play(.important)
         if f.isBreak {
             bubble = Bubble(text: Lines.breakEnd(), actions: [focusAction(day.next), laterAction()], seconds: 60, urgent: true)
         } else {

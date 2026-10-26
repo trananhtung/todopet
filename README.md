@@ -132,7 +132,22 @@ In priority order, at most one bubble at a time:
 12. A nudge with the next task, every 45 minutes
 13. A productivity tip now and then, only when the mood is good
 
-All timings are in **Settings**: daily target, work hours, work days, planning deadline, reminder interval, focus and break length, distracting apps and websites, calendar options, when a task counts as postponed, a custom Todoist filter for "my day" (for example `(today | overdue) & #Work`), pet size, sounds, mischief, spoken lines, and open at login.
+All timings are in **Settings**: daily target, work hours, work days, planning deadline, reminder interval, focus and break length, distracting apps and websites, calendar options, when a task counts as postponed, a custom Todoist filter for "my day" (for example `(today | overdue) & #Work`), pet size, sounds, mischief, spoken lines, focus protection, and open at login.
+
+## Designed not to break your focus
+
+A reminder app that interrupts deep work does more harm than good, so the pet follows what interruption research recommends:
+
+| Rule | Why |
+|---|---|
+| **Interrupt at a pause.** Non-urgent bubbles wait until you stop typing for a few seconds or switch apps. Meeting and due-time reminders still arrive on time. | Interruptions at task boundaries cause less frustration and faster resumption than mid-task ones (Adamczyk & Bailey 2004; Iqbal & Bailey 2008). |
+| **Protect deep work.** After 10 minutes of steady typing in work apps the pet shows 🎧, holds everything non-urgent, and counts the time as progress. No grumpiness, no mischief. | Getting back on track after an interruption is slow and stressful (Mark et al. 2008). |
+| **Fewer bubbles.** At least 15 minutes between unsolicited bubbles (configurable), one at a time. | Batched, less frequent notifications improve attention and well-being (Fitz et al. 2019). |
+| **Keep still while you type.** The pet stops walking and dampens its movements, and walks again when you pause. | Motion at the edge of vision grabs attention involuntarily (Bartram et al. 2003). |
+| **Quiet by default.** Sounds are "important only" (meetings, due times, end of focus, finished tasks) and soft. Ordinary bubbles fade in silently. | Calm technology informs from the periphery and only moves to the center when needed (Weiser & Brown 1996). |
+| **Mischief targets slacking, not work.** Antics never fire while you're typing, during meetings or focus sessions, or while you're away. | Nagging someone who's already working only breaks their flow. |
+
+Sounds have three levels in Settings: **Off**, **Important only** (default) and **Everything**.
 
 ## Why these features
 
@@ -182,6 +197,7 @@ build/TodoPet.app/Contents/MacOS/TodoPet --snapshot out/  # render moods, board 
 | `PetLife.swift` | Fullness, dirt, XP and stages, combos, accessories, day settlement |
 | `Antics.swift` | Mischief types, the dragged sign, spoken lines |
 | `LifeViews.swift` | Life bar and wardrobe & achievements view |
+| `Calm.swift` | When it's OK to interrupt: typing pauses, deep-work detection, bubble spacing |
 | `PetArt.swift` | The pet, drawn in code for every mood |
 | `PetWindow.swift` | Floating window, walking, drag and drop |
 | `Bubble.swift` / `BoardView.swift` / `SettingsView.swift` | UI |
