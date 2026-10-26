@@ -36,16 +36,25 @@ done
 # Sign with the stable local certificate when it exists (scripts/setup-signing.sh), so macOS keeps
 # granted permissions across rebuilds; otherwise fall back to an ad-hoc signature.
 SIGN_DIR="$HOME/Library/Application Support/TodoPet-Signing"
+SIGN_KC="$SIGN_DIR/signing.keychain-db"
 signed=0
-if [[ -f "$SIGN_DIR/signing.keychain-db" && -f "$SIGN_DIR/keychain-password" ]]; then
-  security unlock-keychain -p "$(cat "$SIGN_DIR/keychain-password")" "$SIGN_DIR/signing.keychain-db"
-  if codesign --force --sign "TodoPet Local Signing" --keychain "$SIGN_DIR/signing.keychain-db" \
+if [[ -f "$SIGN_KC" && -f "$SIGN_DIR/keychain-password" ]]; then
+  security unlock-keychain -p "$(cat "$SIGN_DIR/keychain-password")" "$SIGN_KC"
+  # codesign only finds identities in keychains on the search list: add ours just while signing.
+  keychains=()
+  while IFS= read -r k; do keychains+=("$k"); done < <(security list-keychains -d user | sed -e 's/^ *"//' -e 's/"$//')
+  restore_keychains() { security list-keychains -d user -s "${keychains[@]}"; }
+  trap restore_keychains EXIT
+  security list-keychains -d user -s "${keychains[@]}" "$SIGN_KC"
+  if codesign --force --sign "TodoPet Local Signing" --keychain "$SIGN_KC" \
        --identifier com.todopet.mochi "$APP" 2>/dev/null; then
     signed=1
     echo "Built $APP (signed with TodoPet Local Signing)"
   else
     echo "Note: the TodoPet certificate isn't trusted for code signing yet; run scripts/trust-signing.sh once."
   fi
+  restore_keychains
+  trap - EXIT
 else
   echo "Note: run scripts/setup-signing.sh once to stop permission prompts after each rebuild."
 fi
