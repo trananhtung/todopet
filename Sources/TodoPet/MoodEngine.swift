@@ -7,7 +7,7 @@ enum Mood: String, CaseIterable {
         switch self {
         case .happy: "😊"
         case .normal: "🙂"
-        case .annoyed: "😒"
+        case .annoyed: "😟"
         case .angry: "😤"
         case .sleeping: "😴"
         case .focus: "🎯"
@@ -19,7 +19,8 @@ enum Mood: String, CaseIterable {
         switch self {
         case .happy: L("đang vui", "happy")
         case .normal: L("bình thường", "chill")
-        case .annoyed: L("đang nhăn nhó", "annoyed")
+        // Shown as "worried": the pet frets about your day, it doesn't sulk at you.
+        case .annoyed: L("đang lo lắng", "worried")
         case .angry: L("nổi cáu rồi", "grumpy")
         case .sleeping: L("đang ngủ", "sleeping")
         case .focus: L("đang canh bạn tập trung", "guarding your focus")
@@ -51,6 +52,8 @@ struct MoodInputs {
     var stuck = 0
     var satiety: Double = 70
     var dirt = 0
+    /// "Done for today" from the wrap-up: the pet sleeps until the next workday.
+    var doneForToday = false
 }
 
 struct MoodReason: Identifiable, Hashable {
@@ -89,12 +92,16 @@ enum MoodEngine {
             add(-(30 - i.satiety) / 2, L("đang đói (no \(Int(i.satiety))%)", "hungry (\(Int(i.satiety))% full)"))
         }
         if i.dirt > 0 {
-            add(-Double(i.dirt) * 5, L("bẩn vì \(i.dirt) ngày lười", "dirty after \(i.dirt) lazy day(s)"))
+            add(-Double(i.dirt) * 5, L("cần tắm (lỡ \(i.dirt) ngày)", "needs a bath (\(i.dirt) missed day(s))"))
         }
         if i.stuck > 0 {
             add(-Double(min(i.stuck, 3)) * 3, L("\(i.stuck) việc bị dời mãi", "\(i.stuck) task(s) keep getting postponed"))
         }
-        if i.workday && i.inWorkHours && !i.inMeeting {
+        // A wrapped-up day is off duty, like outside work hours.
+        let atWork = i.workday && i.inWorkHours && !i.doneForToday
+        // Only a distraction you're on right now, in work hours, makes the pet grumpy.
+        let distracted = atWork && !i.inMeeting && i.distractedMinutes >= 2
+        if atWork && !i.inMeeting {
             if i.hoursAfterPlanDeadline >= 0 && i.planned < i.target {
                 let gap = Double(i.target - i.planned)
                 add(-(12 + gap * 6 + min(20, i.hoursAfterPlanDeadline * 8)),
@@ -105,13 +112,13 @@ enum MoodEngine {
                 add(-min(30, (i.minutesSinceProgress - 90) / 60 * 10),
                     L("\(String(format: "%.1f", hours)) giờ chưa có tiến triển", "no progress for \(String(format: "%.1f", hours))h"))
             }
-            if i.distractedMinutes >= 2 {
+            if distracted {
                 add(-min(35, 15 + i.distractedMinutes * 2), L("đang xao nhãng với \(i.distractionApp)", "distracted by \(i.distractionApp)"))
             }
         }
         if i.focusing { add(10, L("đang tập trung", "focusing")) }
 
-        if !(i.workday && i.inWorkHours) && s < 55 {
+        if !atWork && s < 55 {
             // Outside work hours the pet relaxes, it only remembers the bad stuff a little.
             s = 55
         }
@@ -121,10 +128,11 @@ enum MoodEngine {
         if i.celebratingNow { mood = .celebrating }
         else if !i.hasToken { mood = .normal }
         else if i.focusing { mood = .focus }
-        else if i.night || i.idleMinutes > 10 { mood = .sleeping }
+        else if i.night || i.idleMinutes > 10 || i.doneForToday { mood = .sleeping }
         else if s >= 75 { mood = .happy }
         else if s >= 50 { mood = .normal }
-        else if s >= 30 { mood = .annoyed }
+        // Everything else (overdue, no progress, no plan, hunger, dirt) bottoms out at worried.
+        else if s >= 30 || !distracted { mood = .annoyed }
         else { mood = .angry }
 
         return (s, mood, reasons.sorted { abs($0.delta) > abs($1.delta) })

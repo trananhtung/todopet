@@ -32,8 +32,11 @@ struct SettingsView: View {
                        "“Important only”: chimes for meetings, tasks due now, the end of a focus session and finished tasks; ordinary bubbles stay silent."))
                     .font(.caption).foregroundColor(.secondary)
                 Toggle(L("Khi nổi cáu thì đuổi theo con trỏ chuột", "Chase the mouse cursor when grumpy"), isOn: $prefs.chaseWhenAngry)
-                Toggle(L("Quậy khi bạn lười (càu nhàu, diễu hành với biển, đứng chắn màn hình)",
-                         "Mischief when you slack (grumbling, sign parade, standing in the way)"), isOn: $prefs.antics)
+                Toggle(L("Quậy khi bạn xao nhãng (càu nhàu, diễu hành với biển, đứng chắn màn hình)",
+                         "Mischief while you're distracted (grumbling, sign parade, standing in the way)"), isOn: $prefs.antics)
+                Text(L("Pet chỉ cáu khi bạn đang ở app hay trang xao nhãng trong giờ làm. Việc quá hạn hay chưa có tiến triển thì pet lo lắng và gợi ý cách gỡ.",
+                       "The pet only gets grumpy while you're on a distracting app or site in work hours. Overdue tasks or a slow day make it worried, and it offers help."))
+                    .font(.caption).foregroundColor(.secondary)
                 Toggle(L("Pet nói thành tiếng (giọng Linh của macOS)", "Pet speaks out loud (macOS voice)"), isOn: $prefs.voiceOn)
                 if prefs.voiceOn {
                     Button(L("Nghe thử", "Test voice")) { Voice.shared.say(L("Ê! Làm việc đi chứ!", "Hey! Get to work!")) }
@@ -55,6 +58,17 @@ struct SettingsView: View {
                 Toggle(L("Pet đứng yên, cử động nhẹ khi bạn đang gõ phím", "Pet keeps still while you type"), isOn: $prefs.stillWhileTyping)
                 Stepper(L("Cách nhau ít nhất \(prefs.bubbleGap) phút giữa hai lời nhắc", "At least \(prefs.bubbleGap) minutes between reminders"),
                         value: $prefs.bubbleGap, in: 5...60, step: 5)
+                Stepper(L("Tối đa \(prefs.nudgeBudget) lời nhắc mỗi ngày", "At most \(prefs.nudgeBudget) reminders a day"),
+                        value: $prefs.nudgeBudget, in: 0...30)
+                Text(L("Lời nhắc nào bạn hay đóng sẽ thưa dần; bỏ qua 3 lần liền thì pet im 1 giờ. Họp và việc có giờ không tính.",
+                       "Reminders you keep closing come less often; pass on 3 in a row and the pet holds off for an hour. Meetings and timed tasks don't count."))
+                    .font(.caption).foregroundColor(.secondary)
+                Toggle(L("Thẻ “Mình đang làm dở gì nhỉ?” sau khi nghỉ, họp hay lạc sang trang khác",
+                         "“Where was I?” card after a break, a meeting or a detour"), isOn: $prefs.resumeCard)
+                if prefs.resumeCard {
+                    Toggle(L("Thẻ được ghi tên trang và địa chỉ (không bao giờ từ cửa sổ ẩn danh)",
+                             "The card may show the page title and address (never from a private window)"), isOn: $prefs.resumeDetails)
+                }
                 Text(L("Lời nhắc không gấp chỉ hiện khi bạn ngừng gõ một chút hoặc chuyển app. Nhắc họp và việc tới giờ luôn hiện đúng lúc.",
                        "Non-urgent reminders wait until you pause typing or switch apps. Meeting and due-time reminders always arrive on time."))
                     .font(.caption).foregroundColor(.secondary)
@@ -105,6 +119,8 @@ struct SettingsView: View {
                 Stepper(prefs.wishPerDay == 0 ? L("Nhắc vía: tắt", "Wish reminders: off")
                                               : L("Nhắc vía \(prefs.wishPerDay) lần mỗi ngày", "Wish reminders: \(prefs.wishPerDay)× a day"),
                         value: $prefs.wishPerDay, in: 0...4)
+                Stepper(L("Việc chưa có thời lượng tính là \(prefs.defaultEstimate) phút", "Tasks without a duration count as \(prefs.defaultEstimate) min"),
+                        value: $prefs.defaultEstimate, in: 10...120, step: 5)
                 Stepper(L("Phiên tập trung: \(prefs.focusMinutes) phút", "Focus session: \(prefs.focusMinutes) min"),
                         value: $prefs.focusMinutes, in: 5...90, step: 5)
                 Stepper(L("Nghỉ giữa phiên: \(prefs.breakMinutes) phút", "Break: \(prefs.breakMinutes) min"),

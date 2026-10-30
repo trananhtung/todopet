@@ -11,6 +11,10 @@ final class PetMotion {
     var held = false
     /// You're typing or in the zone: small movements, no walking.
     var calm = false
+    /// A gesture the pet window plays on its own (shaking off after a drag, giggling when patted, a yawn).
+    var gesture: PetGesture?
+    /// When the cursor came to rest on the pet.
+    var hoverSince: Double?
     private var shownMood: Mood = .normal
     private var prevMood: Mood = .normal
     private var changedAt: Double = 0
@@ -24,6 +28,7 @@ final class PetMotion {
         var pose = PetPose(mood: mood, t: t, facing: facing, walking: walking, walkPhase: walkPhase, lookX: lookX,
                            hovered: hovered, held: held, prevMood: prevMood, blend: min(1, (t - changedAt) / 0.8))
         pose.calm = calm
+        if hovered, let h = hoverSince { pose.hoverFor = t - h }
         return pose
     }
 }
@@ -49,6 +54,16 @@ struct PetView: View {
                 Canvas { ctx, size in
                     var pose = motion.pose(mood: brain.mood, t: t)
                     pose.decorate(life.state)
+                    // Gestures never play while you type, focus or are in a meeting.
+                    if !motion.calm, brain.focus == nil {
+                        for g in [motion.gesture, brain.gesture].compactMap({ $0 }) {
+                            if let progress = g.progress(at: tl.date) {
+                                pose.gesture = g.kind
+                                pose.gestureP = progress
+                                break
+                            }
+                        }
+                    }
                     if let c = brain.celebration {
                         pose.celebration = c.kind
                         pose.golden = c.golden
@@ -99,6 +114,8 @@ final class PetHitView: NSView {
     var onDragMoved: ((NSPoint) -> Void)?
     var onDragEnded: (() -> Void)?
     var onHover: ((Bool) -> Void)?
+    /// Two or more quick clicks: a pat (the count says how many).
+    var onPat: ((Int) -> Void)?
 
     private var downAt: NSPoint?
     private var startOrigin = NSPoint.zero
@@ -141,7 +158,11 @@ final class PetHitView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
-        if dragging { onDragEnded?() } else if downAt != nil { onClick?() }
+        if dragging {
+            onDragEnded?()
+        } else if downAt != nil {
+            if event.clickCount >= 2, let onPat { onPat(event.clickCount) } else { onClick?() }
+        }
         downAt = nil
         dragging = false
     }
@@ -158,6 +179,8 @@ final class PetController {
     private let brain: Brain
     private let prefs: Prefs
     private var timer: Timer?
+    private var shakeOnLanding = false
+    private var nextYawn = CACurrentMediaTime() + .random(in: 240...480)
     private var last = CACurrentMediaTime()
     private var lastCalmCheck: Double = 0
     private var x: CGFloat = 0
@@ -232,7 +255,10 @@ final class PetController {
         container.addSubview(hit)
         panel.contentView = container
 
-        hit.onHover = { [weak self] inside in self?.motion.hovered = inside }
+        hit.onHover = { [weak self] inside in
+            self?.motion.hovered = inside
+            self?.motion.hoverSince = inside ? Date.timeIntervalSinceReferenceDate : nil
+        }
         hit.onDragBegan = { [weak self] in
             self?.behavior = .held
             self?.motion.held = true
@@ -246,6 +272,7 @@ final class PetController {
             self?.motion.held = false
             self?.vy = 0
             self?.behavior = .fall
+            self?.shakeOnLanding = true
         }
 
         let vf = (NSScreen.main ?? NSScreen.screens[0]).visibleFrame
@@ -262,6 +289,11 @@ final class PetController {
 
     func applySize() {
         panel.setFrame(NSRect(x: x, y: y, width: size, height: size), display: true)
+    }
+
+    /// Quick clicks: a few make the pet giggle, too many make it dizzy.
+    func pat(_ clicks: Int) {
+        motion.gesture = PetGesture(kind: clicks >= 5 ? .dizzy : .giggle, start: Date())
     }
 
     func show() { panel.orderFrontRegardless() }
@@ -317,9 +349,20 @@ final class PetController {
                 y = groundY
                 vy = 0
                 behavior = .idle(until: now + 0.8)
+                if shakeOnLanding {
+                    shakeOnLanding = false
+                    motion.gesture = PetGesture(kind: .shake, start: Date())
+                }
             }
         case .idle(let until):
             motion.walking = false
+            // Now and then, when nothing is going on, a little yawn.
+            if now >= nextYawn {
+                nextYawn = now + .random(in: 240...540)
+                if !paused, !motion.calm, !motion.hovered, mood == .normal || mood == .sleeping {
+                    motion.gesture = PetGesture(kind: .yawn, start: Date())
+                }
+            }
             if now >= until && !paused && !motion.hovered { chooseNext(now, mood) }
         case .walk(let tx):
             if paused || motion.hovered || motion.calm || speed(mood) == 0 {

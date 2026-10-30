@@ -1,7 +1,8 @@
 import AppKit
 
 /// Reads the address of the active tab in the frontmost browser, so the pet can notice distracting sites.
-/// Uses AppleScript (macOS asks once per browser for Automation permission). URLs stay in memory only.
+/// Uses AppleScript (macOS asks once per browser for Automation permission). Addresses and page titles stay in
+/// memory only.
 @MainActor
 final class BrowserWatcher {
     struct Browser {
@@ -12,7 +13,12 @@ final class BrowserWatcher {
 
     struct Visit {
         let host: String
-        let url: String
+        /// The latest address on this host (the "where was I?" card reopens it).
+        var url: String
+        var title: String
+        /// A private or incognito window: used for distraction checks, never remembered.
+        var isPrivate: Bool
+        /// When you arrived on this host.
         let since: Date
     }
 
@@ -28,7 +34,7 @@ final class BrowserWatcher {
             with timeout of 5 seconds
                 tell application id "\(id)"
                     if (count of documents) is 0 then return ""
-                    return URL of front document
+                    return (URL of front document) & linefeed & (name of front document)
                 end tell
             end timeout
             """)
@@ -38,7 +44,12 @@ final class BrowserWatcher {
             with timeout of 5 seconds
                 tell application id "\(id)"
                     if (count of windows) is 0 then return ""
-                    return URL of active tab of front window
+                    set t to active tab of front window
+                    set m to ""
+                    try
+                        set m to mode of front window
+                    end try
+                    return (URL of t) & linefeed & (title of t) & linefeed & m
                 end tell
             end timeout
             """)
@@ -103,12 +114,21 @@ final class BrowserWatcher {
         guard frontBundle() == browserID else { return }
         switch result {
         case .url(let raw):
-            let url = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            let lines = raw.trimmingCharacters(in: .whitespacesAndNewlines).components(separatedBy: "\n")
+            let url = lines[0].trimmingCharacters(in: .whitespaces)
+            let title = lines.count > 1 ? lines[1].trimmingCharacters(in: .whitespaces) : ""
+            let isPrivate = lines.count > 2 && lines[2].trimmingCharacters(in: .whitespaces) == "incognito"
             guard let host = BrowserWatcher.host(of: url) else {
                 visit = nil
                 return
             }
-            if visit?.host != host { visit = Visit(host: host, url: url, since: Date()) }
+            if visit?.host != host {
+                visit = Visit(host: host, url: url, title: title, isPrivate: isPrivate, since: Date())
+            } else {
+                visit?.url = url
+                visit?.title = title
+                visit?.isPrivate = isPrivate
+            }
         case .denied:
             denied.insert(browserID)
             visit = nil

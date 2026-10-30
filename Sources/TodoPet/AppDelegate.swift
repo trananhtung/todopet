@@ -59,8 +59,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.openBoard(focusAdd: false)
         }
         brain.openSettings = { [weak self] in self?.openSettings() }
+        brain.openAdd = { [weak self] text in
+            self?.board.state.addPrefill = text
+            self?.openBoard(focusAdd: true)
+        }
+        brain.openWrapUp = { [weak self] lighten in
+            self?.board.state.wrapUp = lighten ? .lighten : .wrapUp
+            self?.openBoard(focusAdd: false)
+        }
 
         pet.hit.onClick = { [weak self] in self?.petClicked() }
+        pet.hit.onPat = { [weak self] clicks in
+            // The first click opened the board: a pat closes it again and makes the pet giggle.
+            if self?.board.isShown == true { self?.board.popover.performClose(nil) }
+            self?.pet.pat(clicks)
+        }
         pet.hit.onRightClick = { [weak self] event in
             guard let self else { return }
             let menu = NSMenu()
@@ -81,7 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }.store(in: &cancellables)
 
         bubbles.model.onAction = { [weak self] action in
-            self?.brain.noteResponse(.picked(action.title))
+            self?.brain.noteResponse(.picked(action.title, neutral: action.neutral))
             self?.brain.bubble = nil
             action.run()
         }
@@ -114,7 +127,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
         if !pet.isVisible || (board.isShown && !b.urgent) {
-            brain.bubble = nil
+            brain.dropUnseen()
             return
         }
         let id = b.id
@@ -249,6 +262,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(ActionItem(L("Bật lại nhắc nhở", "Resume reminders")) { [weak self] in self?.brain.quiet(minutes: nil) })
         } else {
             menu.addItem(ActionItem(L("Im lặng 1 giờ", "Quiet for 1 hour")) { [weak self] in self?.brain.quiet(minutes: 60) })
+        }
+        if brain.hasToken {
+            if brain.doneForToday {
+                menu.addItem(ActionItem(L("☀️ Thức dậy", "☀️ Wake up")) { [weak self] in self?.brain.wakeUp() })
+            } else {
+                menu.addItem(ActionItem(L("🌙 Đóng ngày…", "🌙 Wrap up…")) { [weak self] in self?.brain.openWrapUp?(false) })
+            }
         }
         menu.addItem(ActionItem(L("Làm mới", "Refresh"), key: "r") { [weak self] in self?.brain.refreshSoon() })
         menu.addItem(ActionItem(L("✨ Xin vía…", "✨ Wishes…")) { [weak self] in

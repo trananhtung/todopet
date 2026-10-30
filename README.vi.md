@@ -15,14 +15,18 @@ Một chú pet nhỏ cho macOS, đi dạo trên thanh Dock, đọc công việc 
 - **Đi dạo trên màn hình.** Mochi đi qua đi lại trên Dock, nhìn theo con trỏ, và đứng lại khi bạn rê chuột vào. Kéo thả đi đâu cũng được, thả ra nó sẽ rơi xuống lại.
 - **Hỏi "Hôm nay làm gì?".** Nếu hôm nay chưa có đủ **3 việc** (chỉnh được), pet sẽ nhắc bạn lên kế hoạch: buổi sáng hỏi nhẹ nhàng, qua giờ hạn chót thì nhắc gắt dần.
 - **Nhắc đúng việc cần làm.** Pet chọn việc tiếp theo theo kiểu "ăn con ếch trước" (ưu tiên cao nhất, rồi giờ sớm nhất), nhắc mỗi 45 phút, và báo trước 10 phút với việc có giờ cụ thể.
-- **Có tâm trạng thật.** Pet ăn mừng mỗi việc bạn xong (kể cả việc tích trong app Todoist), và nhăn nhó, rồi nổi cáu, khi có việc quá hạn, nhiều giờ không tiến triển, hoặc bạn ngồi lâu trong app gây xao nhãng. Lúc cáu nó còn hầm hầm đi về phía con trỏ chuột 😤
+- **Có tâm trạng tử tế.** Pet ăn mừng mỗi việc bạn xong (kể cả việc tích trong app Todoist). Khi có việc quá hạn, nhiều giờ không tiến triển hoặc chưa lên kế hoạch, pet **lo lắng** và gợi ý cách gỡ: kéo việc vào hôm nay, **🌱 Bắt đầu lại** (dời hết việc quá hạn sang mai), thử 2 phút, hoặc chia nhỏ việc to. Pet chỉ **nổi cáu** khi bạn ngồi trong app hay trang web gây xao nhãng trong giờ làm, và lúc đó nó hầm hầm đi về phía con trỏ chuột 😤
 - **Làm việc với Todoist ngay trên pet.** Bấm vào pet để xem việc hôm nay, tích hoàn thành, thêm việc mới (Hôm nay / Ngày mai / Không hạn, độ ưu tiên, hoặc cú pháp quick-add của Todoist như `Gọi Lan 3pm p1 #Work`), dời việc sang hôm nay hoặc ngày mai, xoá việc (có bước xác nhận, vì Todoist không khôi phục được), và xem chuỗi ngày (streak) trên Todoist.
 - **Có hẹn giờ tập trung.** Bắt đầu phiên 25 phút cho một việc, pet đeo băng đô rồi ngồi im trong góc. Hết giờ, pet hỏi bạn xong chưa; nếu xong, pet tự đánh dấu hoàn thành trên Todoist và bắt đầu giờ nghỉ.
-- **Tổng kết cuối ngày.** 30 phút trước giờ tan làm, pet cho bạn xem đã xong bao nhiêu việc và đề nghị dời phần còn lại sang mai.
+- **Cùng bạn đóng ngày.** Từ 15:00 (hoặc 30 phút trước giờ tan làm), nút 🌙 trên bảng việc mở **Đóng ngày**: những việc đã xong, mỗi việc còn dở chọn **Giữ / Mai / Bỏ hạn**, rồi chọn **con ếch cho ngày mai** và để lại một dòng nhắn cho chính mình. **Xong ngày hôm nay** cho pet đi ngủ tới đầu giờ làm hôm sau (họp và việc có giờ vẫn nhắc). Sáng hôm sau, lời chào nhắc lại con ếch và lời nhắn, và con ếch được xếp lên đầu.
 - **Bắt quả tang trang web gây xao nhãng.** Pet đọc tab đang mở trong Safari, Chrome, Arc, Edge, Brave, Cốc Cốc và các trình duyệt Chromium khác. Ngồi YouTube hay Facebook quá 2 phút trong giờ làm là pet bắt đầu nhăn nhó. Bạn tự chọn danh sách trang; quy tắc như `youtube.com/shorts` chỉ bắt đúng một phần của trang.
 - **Biết lịch họp của bạn.** Pet đọc các sự kiện hôm nay từ Lịch của macOS (gồm cả tài khoản Google, Outlook đã thêm vào Lịch). Pet nhắc trước giờ họp 5 phút kèm nút **Vào họp**, im lặng khi bạn đang họp, và không tính giờ họp là lười. Ngày nào họp nhiều thì pet hạ mục tiêu, khoảng 2 giờ trống cho 1 việc quan trọng.
 - **Gợi ý khung giờ.** Pet xếp các việc tiếp theo vào khoảng trống trong ngày ("10:00–11:00 Viết báo cáo"). Một cú bấm là đặt giờ đó cho việc trong Todoist, và pet sẽ nhắc bạn đúng giờ.
 - **Phát hiện việc bị dời mãi.** Việc nào nằm trong danh sách từ 3 ngày trở lên, pet hỏi bạn muốn chia nhỏ hay bỏ khỏi kế hoạch. Chia nhỏ là tách thành các bước 15–30 phút, thêm vào Todoist dưới dạng việc con, bước 1 vào kế hoạch hôm nay. Nếu có API key Claude, nút **Nhờ Claude gợi ý** sẽ đề xuất các bước giúp bạn.
+- **"Mình đang làm dở gì nhỉ?"** Sau khi bạn rời máy 5 phút trở lên, sau một cuộc họp, hoặc sau 2 phút lạc sang trang gây xao nhãng, pet cho bạn xem mình đang làm gì: việc, ứng dụng và trang, kèm nút **Mở lại ↗** (đúng tab đó, đúng trình duyệt đó), **Tập trung** và **Việc khác**. Nút **📌 Ghim chỗ đang làm** trên bảng việc giữ chỗ của bạn kèm một dòng "bước tiếp theo". Tất cả chỉ nằm trong bộ nhớ, không bao giờ ghi trang của cửa sổ ẩn danh, và tối đa 30 phút hiện một lần.
+- **Kẹp hai đầu cuộc họp.** Bong bóng "sắp họp" liệt kê tối đa 2 việc có chữ trùng với tên cuộc họp. Họp từ 15 phút trở lên thì sau họp pet hỏi **Có gì cần ghi lại không?** (nút **＋ Việc tiếp theo** mở ô thêm việc có sẵn tên cuộc họp), và gợi ý nghỉ 5 phút nếu cuộc họp sau đã gần.
+- **Hẹn "nếu… thì bắt đầu" và bước khởi động 2 phút.** Menu **⋯** của mỗi việc có **Bắt đầu khi…** (sau một cuộc họp hôm nay, khi mở một ứng dụng bạn vừa dùng, hoặc sau bữa trưa) và **⏱ Thử 2 phút**: một phiên siêu ngắn chỉ để "mở nó ra", hết giờ pet hỏi làm tiếp một phiên hay "thế là đủ".
+- **Cảnh báo quá tải và dải thời gian.** Bảng việc hiện ngày làm việc thành một dải mỏng (họp, việc có giờ, bây giờ) kèm "~6h việc & họp / còn 7h". Mỗi ngày một lần, nếu việc cộng với họp còn lại vượt thời gian còn lại từ 1 giờ trở lên, pet nói cho bạn biết và mời **Chọn việc để dời**. Việc chưa có thời lượng trong Todoist được tính 30 phút (chỉnh trong Cài đặt).
 - **Nói tiếng Việt và tiếng Anh**, đổi trong Cài đặt.
 
 ### Xin vía: điều bạn mong muốn, được nhắc đi nhắc lại
@@ -46,7 +50,9 @@ Mỗi điều ước còn có thể ghi kết quả bạn hình dung, trở ng�
 - **Nhìn pet lớn lên.** Việc xong cho XP, và pet lớn dần từ Em bé (có mầm lá trên đầu) lên Nhóc, Thiếu niên, Trưởng thành, Cao thủ.
 - **Ăn mừng bất ngờ.** Mỗi việc xong là một kiểu ngẫu nhiên: nhảy, xoay, lộn nhào, nhảy disco. 1/10 lần là bánh vàng hiếm, pet hoá vàng. Xong việc liên tiếp trong vòng 30 phút sẽ thành combo ×2, ×3…, nhiều XP hơn, và kết bằng pháo hoa.
 - **Mở khoá đồ để mặc.** Nơ, khăn, kính râm, mũ quý ông, vương miện, mũ tốt nghiệp, mở theo các cột mốc: việc đầu tiên, chuỗi 3 ngày, combo ×3, 25 việc, chuỗi 7 ngày… Có thêm sổ sticker ghi lại những ngày bạn làm trọn kế hoạch.
-- **Quậy leo thang khi bạn lười.** Nhăn nhó 10 phút thì pet thở dài, giậm chân. Cáu 10 phút thì pet diễu hành ngang màn hình, kéo theo tấm biển ghi tên việc bạn đang né. Đang cáu mà ngồi YouTube 5 phút thì pet nhảy lên giữa màn hình kèm (╯°□°)╯︵ ┻━┻. Cuối ngày, pet hờn dỗi báo bạn đã lướt mạng bao lâu. Pet có thể nói thành tiếng bằng giọng Linh của macOS (mặc định tắt).
+- **Chuỗi ngày biết tha thứ.** Chỉ cần xong 1 việc trong ngày làm việc là giữ chuỗi. Ngày đạt mục tiêu được thêm một 🍪 bánh (giữ tối đa 2), lỡ một ngày làm việc thì pet ăn bánh thay vì làm đứt chuỗi. Chuỗi từ 2 ngày bị đứt vẫn **nối lại được**: xong 2 việc trong một ngày làm việc trong vòng 2 tuần. Ngày nghỉ, ngày tắt máy và ngày họp kín lịch không bao giờ bị tính là lười.
+- **Pet như đang sống.** Để con trỏ nằm yên trên pet, nó nheo mắt rồi chớp chậm như mèo được vuốt, kèm một trái tim nhỏ. Bấm đúp, pet cười khúc khích; bấm tiếp, pet chóng mặt. Kéo thả xong nó rũ mình, bạn quay lại thì nó vẫy tay, lúc yên ắng thỉnh thoảng nó ngáp. Không trò nào diễn ra khi bạn đang gõ phím, tập trung hay họp.
+- **Chỉ quậy khi bạn đang xao nhãng.** Ngồi trang gây xao nhãng 3 phút là pet thở dài, giậm chân. Cáu ở đó 10 phút thì pet diễu hành ngang màn hình, kéo theo tấm biển ghi tên việc bạn đang né. Đang cáu mà ngồi YouTube 5 phút thì pet nhảy lên giữa màn hình kèm (╯°□°)╯︵ ┻━┻. Pet không bao giờ quậy sau một ngày tệ, vì như thế chỉ làm bạn nản hơn. Cuối ngày, pet hờn dỗi báo bạn đã lướt mạng bao lâu. Pet có thể nói thành tiếng bằng giọng Linh của macOS (mặc định tắt).
 - **Quậy có luật.** Không quậy khi bạn đang họp, đang tập trung hay đã rời máy. Trò lớn tối đa 20 phút một lần. Mỗi trò có nút **Tha cho tôi 15'**, và bấm vào pet là pet thôi quậy. Bạn có thể tắt hẳn trò quậy trong Cài đặt.
 
 | Tủ đồ | Trò quậy |
@@ -56,6 +62,10 @@ Mỗi điều ước còn có thể ghi kết quả bạn hình dung, trở ng�
 | Bảng việc | Bong bóng thoại | Chia nhỏ việc |
 |---|---|---|
 | ![Bảng việc](docs/board-vi.png) | ![Bong bóng](docs/bubble-vi.png)<br>![Việc bị dời mãi](docs/bubble-stuck-vi.png) | ![Chia nhỏ](docs/split-vi.png) |
+
+| Đóng ngày | Đang làm dở gì · Sau cuộc họp |
+|---|---|
+| ![Đóng ngày](docs/wrapup-vi.png) | ![Đang làm dở gì](docs/bubble-resume-vi.png)<br>![Sau cuộc họp](docs/bubble-meeting-vi.png) |
 
 ## Cài đặt
 
@@ -123,7 +133,7 @@ Thanh menu hiện tâm trạng và tiến độ hôm nay (`😊 2/3`), hoặc đ
 
 Mochi có điểm hạnh phúc từ 0 đến 100, tính lại mỗi 15 giây. Rê chuột vào dòng lý do trên bảng việc để xem chi tiết.
 
-| Làm pet vui hơn | Làm pet cáu hơn |
+| Làm pet vui hơn | Làm pet lo hơn |
 |---|---|
 | +8 cho mỗi việc xong hôm nay | −7 cho mỗi việc quá hạn |
 | +30 khi xong hết kế hoạch hôm nay | −4 cho mỗi việc đã trễ giờ |
@@ -134,25 +144,31 @@ Mochi có điểm hạnh phúc từ 0 đến 100, tính lại mỗi 15 giây. R�
 | | Tới −15 khi pet đói (dưới 30% no) |
 | | −5 cho mỗi lớp bẩn |
 
-Từ 75 điểm là vui, từ 50 là bình thường, từ 30 là nhăn nhó, thấp hơn nữa là nổi cáu. Ngoài giờ làm, ban đêm, khi đang họp, hoặc khi bạn rời máy 10 phút, pet dịu lại hoặc ngủ, và không bao giờ cằn nhằn lúc bạn vắng mặt.
+Từ 75 điểm là vui, từ 50 là bình thường, thấp hơn là lo lắng. Pet chỉ nổi cáu (dưới 30 điểm) khi bạn đang ở app hay trang gây xao nhãng trong giờ làm. Ngoài giờ làm, ban đêm, khi đang họp, sau khi bấm **Xong ngày hôm nay**, hoặc khi bạn rời máy 10 phút, pet dịu lại hoặc ngủ, và không bao giờ cằn nhằn lúc bạn vắng mặt.
 
 ## Khi nào pet lên tiếng
 
 Theo thứ tự ưu tiên, mỗi lúc chỉ một bong bóng:
 
-1. Vài phút trước giờ họp (kể cả khi đang tập trung), sau đó im lặng tới khi họp xong
+1. Vài phút trước giờ họp (kể cả khi đang tập trung), kèm các việc liên quan, sau đó im lặng tới khi họp xong
 2. 10 phút trước và đúng giờ của việc có giờ cụ thể
-3. Chào buổi sáng kèm kế hoạch hôm nay (hoặc nhắc lên kế hoạch) và tóm tắt lịch họp, giờ trống
-4. "Hôm nay mình làm 3 việc gì nào?" mỗi 30 phút sau hạn lên kế hoạch, cho tới khi đủ việc
-5. Mở app hoặc trang web gây xao nhãng quá 2 phút
-6. Việc bị dời mãi: chia nhỏ hay bỏ khỏi kế hoạch
-7. Đói: xin bạn xong một việc, tối đa mỗi giờ một lần
-8. Quậy khi bạn lười: càu nhàu, rồi diễu hành với tấm biển (trò lật bàn đi kèm mục 5)
-9. Việc quá hạn, mỗi 90 phút
-10. Mỗi ngày một lần, gợi ý khung giờ cho việc tiếp theo
-11. Tổng kết cuối ngày, rồi báo cáo hờn dỗi nếu bạn xao nhãng từ 10 phút trở lên
-12. Nhắc việc tiếp theo, mỗi 45 phút
-13. Thỉnh thoảng một mẹo năng suất, chỉ khi pet đang vui
+3. Bạn quay lại sau 5 phút trở lên: "mình đang làm dở gì nhỉ?" (hoặc việc tiếp theo)
+4. Sau cuộc họp: "có gì cần ghi lại không?", kèm gợi ý nghỉ trước cuộc họp sau
+5. Việc có hẹn **Bắt đầu khi…** đã tới lúc
+6. *(Sau khi bấm **Xong ngày hôm nay** thì không còn gì từ đây trở xuống.)* Mở app hoặc trang web gây xao nhãng quá 2 phút; vừa rời trang đó sau 2 phút trở lên: "mình đang làm dở gì nhỉ?"
+7. Chào buổi sáng kèm kế hoạch hôm nay (hoặc nhắc lên kế hoạch), con ếch và lời nhắn từ hôm qua, tóm tắt lịch họp và giờ trống
+8. Mỗi ngày một lần, cảnh báo quá tải
+9. "Hôm nay mình làm 3 việc gì nào?" mỗi 30 phút sau hạn lên kế hoạch, cho tới khi đủ việc
+10. Việc bị dời mãi: chia nhỏ, thử 2 phút, hay bỏ khỏi kế hoạch
+11. Đói: xin bạn xong một việc, tối đa mỗi giờ một lần
+12. Quậy khi bạn đang xao nhãng: càu nhàu, rồi diễu hành với tấm biển (trò lật bàn đi kèm mục 6)
+13. Việc quá hạn, mỗi 90 phút, kèm nút **Bắt đầu lại**
+14. Mỗi ngày một lần, gợi ý khung giờ cho việc tiếp theo
+15. Đóng ngày, rồi báo cáo hờn dỗi nếu bạn xao nhãng từ 10 phút trở lên
+16. Nhắc việc tiếp theo, mỗi 45 phút
+17. Thỉnh thoảng một mẹo năng suất, chỉ khi pet đang vui
+
+**Ngân sách nhắc mỗi ngày:** tối đa 8 lời nhắc tự phát mỗi ngày (chỉnh trong Cài đặt). Lời nhắc nào bạn đóng, hoặc để tự ẩn khi nó có nút bấm, sẽ thưa đi một nửa trong phần còn lại của ngày (tới ×8), và bỏ qua 3 lời nhắc liên tiếp thì pet im 1 giờ. Họp, việc có giờ, hẹn **Bắt đầu khi…** của chính bạn và các thẻ như "mình đang làm dở gì" không bị tính. Chân bảng việc hiện 🔔 số lượt còn lại.
 
 Mọi mốc thời gian đều chỉnh được trong **Cài đặt**: số việc mỗi ngày, giờ làm, ngày làm việc, hạn lên kế hoạch, khoảng nhắc, độ dài phiên tập trung và giờ nghỉ, app và trang web gây xao nhãng, tuỳ chọn Lịch, sau bao nhiêu ngày thì tính là bị dời mãi, bộ lọc Todoist riêng cho "việc của tôi" (ví dụ `(today | overdue) & #Work`), kích thước pet, âm thanh, trò quậy, giọng nói, bảo vệ tập trung, và mở cùng macOS.
 
@@ -167,7 +183,8 @@ Một app nhắc việc mà cắt ngang lúc bạn đang tập trung thì hại 
 | **Ít bong bóng hơn.** Hai lời nhắc tự phát cách nhau ít nhất 15 phút (chỉnh được), mỗi lúc một cái. | Thông báo được gom lại, ít hơn giúp tập trung và dễ chịu hơn (Fitz và cộng sự 2019). |
 | **Đứng yên khi bạn gõ phím.** Pet thôi đi lại, cử động nhẹ đi; khi bạn nghỉ tay pet mới đi tiếp. | Chuyển động ở rìa tầm mắt kéo sự chú ý một cách vô thức (Bartram và cộng sự 2003). |
 | **Mặc định yên lặng.** Âm thanh để ở mức "chỉ khi quan trọng" (sắp họp, việc tới giờ, hết phiên tập trung, xong việc) và nhỏ. Bong bóng thường hiện lặng lẽ, mờ dần vào. | "Calm technology": báo tin ở vùng ngoại vi, chỉ chiếm trung tâm khi thật cần (Weiser & Brown 1996). |
-| **Chỉ quậy khi bạn lười, không quậy khi bạn làm.** Không quậy khi bạn đang gõ phím, đang họp, đang tập trung hoặc đã rời máy. | Cằn nhằn người đang làm việc chỉ làm đứt mạch của họ. |
+| **Ngân sách nhắc tự lùi.** Tối đa 8 lời nhắc tự phát mỗi ngày; loại nào bạn hay đóng thì thưa dần. | Gom thông báo lại vài lần mỗi ngày giúp tập trung và năng suất hơn trong một thử nghiệm với 237 người (Fitz và cộng sự 2019). |
+| **Chỉ quậy khi bạn xao nhãng, không quậy khi bạn làm.** Trò quậy chỉ xảy ra khi bạn đang ở app hay trang gây xao nhãng; không bao giờ khi bạn đang gõ phím, đang họp, đang tập trung hoặc đã rời máy. | Phạt khi người dùng trượt thì phản tác dụng; một con pet biết lo và giúp khiến người ta muốn quay lại (Diefenbach & Müssig 2019). |
 
 Âm thanh có 3 mức trong Cài đặt: **Tắt**, **Chỉ khi quan trọng** (mặc định) và **Tất cả**.
 
@@ -202,7 +219,9 @@ Hành vi của pet dựa trên các phương pháp năng suất phổ biến, c�
 ## Quyền riêng tư
 
 - Không thu thập dữ liệu, không có máy chủ riêng. Kết nối mạng chỉ tới `api.todoist.com`, và tới `api.anthropic.com` khi bạn bấm **Nhờ Claude gợi ý**.
-- Phát hiện xao nhãng đọc **tên app đang mở phía trước** và, nếu đó là trình duyệt, **địa chỉ tab đang mở**. Địa chỉ chỉ nằm trong bộ nhớ, không được lưu hay gửi đi đâu. Không cần quay màn hình hay quyền trợ năng.
+- Phát hiện xao nhãng đọc **tên app đang mở phía trước** và, nếu đó là trình duyệt, **địa chỉ và tiêu đề tab đang mở**. Chúng chỉ nằm trong bộ nhớ, không được lưu hay gửi đi đâu. Không cần quay màn hình hay quyền trợ năng.
+- Thẻ **"Mình đang làm dở gì nhỉ?"** nhớ việc, ứng dụng, tiêu đề trang và địa chỉ (chỉ http/https, đã bỏ mọi thứ trông giống token hay phiên đăng nhập) bạn đang làm, cùng bước tiếp theo bạn ghim. Tất cả **chỉ nằm trong bộ nhớ**: không lưu, không ghi vào nhật ký, quên lúc nửa đêm. Cửa sổ ẩn danh không bao giờ được ghi nhớ, và **Cài đặt** có thể bỏ tiêu đề và địa chỉ ra khỏi thẻ.
+- Hẹn **Bắt đầu khi…**, con ếch và lời nhắn cho ngày mai được lưu trong tuỳ chọn cục bộ của app tới khi ngày đó qua.
 - Lịch được đọc ngay trên máy qua macOS (EventKit); sự kiện không rời khỏi máy bạn.
 - Nhật ký "việc bị dời mãi" chỉ gồm mã việc và ngày, lưu trong cài đặt cục bộ của app. Đời sống của pet (độ no, XP, phụ kiện, số phút xao nhãng hôm nay theo từng trang) cũng lưu cục bộ như vậy.
 - Giọng nói dùng giọng có sẵn của macOS, chạy offline.

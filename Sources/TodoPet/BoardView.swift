@@ -12,7 +12,13 @@ final class BoardState: ObservableObject {
     /// Shows "xin vía" (your wishes); `wishFocus` opens the small-step field of one wish.
     @Published var showWishes = false
     @Published var wishFocus: UUID?
+    /// Shows the wrap-up sheet (or its "lighten an overbooked day" variant).
+    @Published var wrapUp: WrapSheet?
+    /// Text to put in the add field next time it gets focus (a meeting's next step).
+    @Published var addPrefill: String?
 }
+
+enum WrapSheet { case wrapUp, lighten }
 
 enum PriorityStyle {
     static func color(_ uiPriority: Int) -> Color {
@@ -64,6 +70,8 @@ struct BoardView: View {
             Divider()
             if state.showLog {
                 LogView(log: brain.log, state: state)
+            } else if brain.hasToken, let w = state.wrapUp {
+                WrapUpView(brain: brain, state: state, lighten: w == .lighten)
             } else if state.showWishes {
                 WishesView(store: brain.wishes, brain: brain, state: state)
             } else if brain.hasToken, state.wardrobe {
@@ -125,7 +133,17 @@ struct BoardView: View {
                 Label(L("Đang chạy chế độ demo — dữ liệu giả.", "Demo mode — sample data."), systemImage: "theatermasks")
                     .font(.caption).foregroundColor(.purple)
             }
-            if brain.day.planned < brain.target {
+            if brain.doneForToday {
+                HStack(spacing: 8) {
+                    Text("😴")
+                    Text(L("Đã xong ngày. Pet ngủ tới đầu giờ làm hôm sau.", "Done for today. The pet sleeps until your next workday."))
+                        .font(.callout).fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 4)
+                    Button(L("Thức dậy", "Wake up")) { brain.wakeUp() }.font(.caption)
+                }
+                .padding(8)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.indigo.opacity(0.10)))
+            } else if brain.day.planned < brain.target {
                 HStack(alignment: .top, spacing: 8) {
                     Text("📝")
                     Text(L("Hôm nay mới có \(brain.day.planned)/\(brain.target) việc. Thêm việc quan trọng nhất trước nhé!",
@@ -141,6 +159,10 @@ struct BoardView: View {
             if let next = brain.day.next {
                 FrogCard(task: next, brain: brain, prefs: prefs)
             }
+            if !brain.strip.isEmpty || brain.load.taskMinutes > 0 {
+                DayStripView(brain: brain, prefs: prefs)
+            }
+            if prefs.resumeCard { PinRow(brain: brain) }
             if prefs.useCalendar {
                 CalendarCard(brain: brain, prefs: prefs)
             }
@@ -210,14 +232,25 @@ struct BoardView: View {
                     close()
                 } label: {
                     Label(L("Tập trung \(prefs.focusMinutes)'", "Focus \(prefs.focusMinutes)'"), systemImage: "timer")
+                        .fixedSize()
                 }
                 .disabled(!brain.hasToken)
             }
+            if brain.hasToken, WrapRules.canWrapUp(Date(), workEnd: prefs.workEnd), !brain.doneForToday {
+                Button { state.wrapUp = .wrapUp } label: { Text("🌙") }
+                    .help(L("Đóng ngày: dời việc còn dở, chọn con ếch cho mai, để lại lời nhắn rồi nghỉ",
+                            "Wrap up: move what's left, pick tomorrow's frog, leave a note, then rest"))
+            }
             Spacer()
+            if brain.hasToken {
+                Text("🔔 \(brain.nudgesLeft)").font(.caption2.monospacedDigit()).foregroundColor(.secondary).fixedSize()
+                    .help(L("Còn \(brain.nudgesLeft)/\(prefs.nudgeBudget) lời nhắc hôm nay (họp và việc có giờ không tính)",
+                            "\(brain.nudgesLeft)/\(prefs.nudgeBudget) reminders left today (meetings and timed tasks don't count)"))
+            }
             if brain.loading {
                 ProgressView().controlSize(.small)
             } else if let d = brain.lastSync {
-                Text(DayMath.timeString(d)).font(.caption2).foregroundColor(.secondary)
+                Text(DayMath.timeString(d)).font(.caption2).foregroundColor(.secondary).fixedSize()
                     .help(L("Lần đồng bộ cuối", "Last sync"))
             }
             Button { brain.refreshSoon() } label: { Image(systemName: "arrow.clockwise") }
@@ -337,6 +370,10 @@ struct TaskRow: View {
                             .help(L("Việc này cứ bị dời mãi — thử chia nhỏ (✂️)", "This keeps getting postponed — try splitting it (✂️)"))
                     }
                     if task.isRecurring { Image(systemName: "repeat") }
+                    if let t = brain.trigger(for: task), !t.fired {
+                        Text("⏰ " + t.trigger.label).foregroundColor(.indigo)
+                            .help(L("Pet sẽ nhắc bắt đầu việc này \(t.trigger.label)", "The pet will bring this up \(t.trigger.label)"))
+                    }
                     ForEach(task.labels ?? [], id: \.self) { Text("@\($0)") }
                 }
                 .font(.caption2)
@@ -348,6 +385,27 @@ struct TaskRow: View {
                     .buttonStyle(.borderless).help(L("Tập trung vào việc này", "Focus on this"))
                 Button { state.breakdown = task } label: { Image(systemName: "scissors") }
                     .buttonStyle(.borderless).help(L("Chia nhỏ thành các bước", "Split into small steps"))
+                Menu {
+                    Button(L("⏱ Thử 2 phút", "⏱ Try 2 minutes")) { brain.startStarter(task) }
+                    Menu(L("Bắt đầu khi…", "Start when…")) {
+                        let choices = brain.triggerChoices()
+                        if choices.isEmpty {
+                            Text(L("Chưa có gợi ý (chưa có họp hay ứng dụng gần đây)", "No suggestions yet (no meetings or recent apps)"))
+                        }
+                        ForEach(choices, id: \.self) { c in
+                            Button(c.label) { brain.setTrigger(task, c) }
+                        }
+                    }
+                    if brain.trigger(for: task) != nil {
+                        Button(L("Bỏ hẹn bắt đầu", "Remove start plan")) { brain.clearTrigger(task) }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help(L("Thêm: thử 2 phút, hẹn bắt đầu khi…", "More: try 2 minutes, start when…"))
                 if !task.isRecurring {
                     Button { brain.reschedule(task, to: overdue ? "today" : "tomorrow") } label: {
                         Image(systemName: overdue ? "arrow.down.to.line" : "arrow.right.to.line")
@@ -411,6 +469,11 @@ struct AddTaskRow: View {
             .controlSize(.small)
         }
         .onChange(of: state.focusAddToken) { _, _ in
+            if let p = state.addPrefill {
+                text = p
+                due = .today
+                state.addPrefill = nil
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { focused = true }
         }
     }
@@ -517,6 +580,7 @@ final class BoardController: NSObject, NSPopoverDelegate {
             state.wardrobe = false
             state.showLog = false
             state.showWishes = false
+            state.wrapUp = nil
             onShownChanged?(false)
         }
     }

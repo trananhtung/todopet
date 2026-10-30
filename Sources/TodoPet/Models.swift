@@ -164,16 +164,20 @@ struct DaySnapshot {
     var overdue: [TodoTask] = []    // active, due before today
     var completed: [TodoTask] = []  // completed today
     var late: [TodoTask] = []       // due today at a time that has passed
+    /// Tomorrow's frog picked in yesterday's wrap-up: it goes first.
+    var frogId: String?
 
     var planned: Int { today.count + completed.count }
     var remaining: Int { today.count }
     var open: [TodoTask] { overdue + today }
 
-    /// Open tasks in "eat the frog" order (highest priority, then earliest time, then oldest overdue).
+    /// Open tasks in "eat the frog" order (the frog you picked, then highest priority, earliest time, oldest overdue).
     /// A task that was split into open sub-steps gives way to its steps.
     var actionable: [TodoTask] {
         let parents = Set(open.compactMap(\.parentId))
-        return DaySnapshot.ranked(open).filter { !parents.contains($0.id) }
+        var list = DaySnapshot.ranked(open).filter { !parents.contains($0.id) }
+        if let f = frogId, let i = list.firstIndex(where: { $0.id == f }) { list.insert(list.remove(at: i), at: 0) }
+        return list
     }
 
     var next: TodoTask? { actionable.first ?? DaySnapshot.ranked(open).first }

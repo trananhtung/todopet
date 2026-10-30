@@ -64,7 +64,7 @@ enum DevTools {
         i.hoursAfterPlanDeadline = -1.5
         check(MoodEngine.evaluate(i).mood == .normal, "before plan deadline with nothing planned: chill")
         i.hoursAfterPlanDeadline = 2
-        check(MoodEngine.evaluate(i).mood == .angry, "2h after plan deadline, nothing planned: grumpy")
+        check(MoodEngine.evaluate(i).mood == .annoyed, "2h after plan deadline, nothing planned: worried (only distractions make it grumpy)")
         i = MoodInputs()
         i.planned = 3; i.completed = 2; i.remaining = 1; i.minutesSinceCelebration = 3
         check(MoodEngine.evaluate(i).mood == .happy, "2/3 done and just finished one: happy")
@@ -74,11 +74,17 @@ enum DevTools {
         check(allDone.mood == .happy && allDone.score >= 99, "all done: happiest")
         i = MoodInputs()
         i.planned = 3; i.remaining = 3; i.overdue = 3; i.minutesSinceProgress = 240
-        check(MoodEngine.evaluate(i).mood == .angry, "overdue + 4h without progress: grumpy")
+        check(MoodEngine.evaluate(i).mood == .annoyed, "overdue + 4h without progress: worried, not grumpy")
         i = MoodInputs()
         i.planned = 3; i.remaining = 3; i.minutesSinceProgress = 30; i.distractedMinutes = 5; i.distractionApp = "TikTok"
         let distracted = MoodEngine.evaluate(i).mood
-        check(distracted == .annoyed || distracted == .angry, "distraction app: annoyed")
+        check(distracted == .annoyed || distracted == .angry, "distraction app: worried or grumpy")
+        i.overdue = 3; i.distractedMinutes = 10
+        check(MoodEngine.evaluate(i).mood == .angry, "grumpy only while on a distraction")
+        i = MoodInputs()
+        i.planned = 1; i.hoursAfterPlanDeadline = 3; i.overdue = 5
+        i.doneForToday = true
+        check(MoodEngine.evaluate(i).mood == .sleeping, "done for today: the pet sleeps")
         i = MoodInputs()
         i.night = true
         check(MoodEngine.evaluate(i).mood == .sleeping, "night: sleeping")
@@ -174,13 +180,44 @@ enum DevTools {
         var days = LifeState()
         days.dayKey = "2026-10-20"
         LifeRules.syncDay(&days, completed: 3, planned: 3, target: 3, workday: true)
-        _ = LifeRules.closeDay(&days, today: "2026-10-21") { _ in true }
-        check(days.streak == 1 && days.perfectDays == ["2026-10-20"] && days.xp == 30, "target met: streak +1, perfect-day sticker")
+        var closed = LifeRules.closeDay(&days, today: "2026-10-21") { _ in true }
+        check(days.streak == 1 && days.perfectDays == ["2026-10-20"] && days.xp == 30 && days.snacks == 2 && closed.outcome == .kept,
+              "target met: streak +1, sticker and a 🍪")
         LifeRules.syncDay(&days, completed: 0, planned: 2, target: 3, workday: true)
-        _ = LifeRules.closeDay(&days, today: "2026-10-24") { _ in true }
-        check(days.streak == 0 && days.dirt == 3, "lazy day and two unseen workdays make the pet dirty")
-        _ = LifeRules.feed(&days, now: t0, roll: 0.5, pick: 0)
-        check(days.dirt == 2, "a finished task washes one layer off")
+        closed = LifeRules.closeDay(&days, today: "2026-10-24") { _ in true }
+        check(closed.outcome == .frozen && days.streak == 1 && days.snacks == 1 && days.dirt == 0,
+              "a missed workday eats a 🍪 instead of the streak; days the Mac was off don't count")
+        var one = LifeState()
+        one.dayKey = "2026-10-20"
+        LifeRules.syncDay(&one, completed: 1, planned: 3, target: 3, workday: true)
+        _ = LifeRules.closeDay(&one, today: "2026-10-21") { _ in true }
+        check(one.streak == 1 && one.snacks == 1, "one finished task keeps the streak")
+        var busy = LifeState()
+        busy.dayKey = "2026-10-20"; busy.streak = 3; busy.snacks = 0
+        LifeRules.syncDay(&busy, completed: 0, planned: 3, target: 3, workday: true, busy: true)
+        closed = LifeRules.closeDay(&busy, today: "2026-10-21") { _ in true }
+        check(closed.outcome == .excused && busy.streak == 3 && busy.dirt == 0, "a packed calendar day is excused")
+        var broken = LifeState()
+        broken.dayKey = "2026-10-20"; broken.streak = 5; broken.snacks = 0
+        LifeRules.syncDay(&broken, completed: 0, planned: 3, target: 3, workday: true)
+        closed = LifeRules.closeDay(&broken, today: "2026-10-21") { _ in true }
+        check(closed.outcome == .broken && closed.lost == 5 && broken.streak == 0 && broken.dirt == 1 && broken.repair?.streak == 5,
+              "no 🍪: the streak breaks, with a repair quest")
+        LifeRules.syncDay(&broken, completed: 2, planned: 3, target: 3, workday: true)
+        check(LifeRules.checkRepair(&broken) && broken.streak == 5, "2 tasks the next day bring the streak back")
+        LifeRules.syncDay(&broken, completed: 1, planned: 3, target: 3, workday: true)
+        _ = LifeRules.checkRepair(&broken)
+        check(broken.streak == 0, "an Undo takes the mended streak back")
+        LifeRules.syncDay(&broken, completed: 2, planned: 3, target: 3, workday: true)
+        _ = LifeRules.checkRepair(&broken)
+        _ = LifeRules.closeDay(&broken, today: "2026-10-22") { _ in true }
+        check(broken.streak == 6 && broken.repair == nil, "the mended streak counts the repair day too")
+        _ = LifeRules.feed(&broken, now: t0, roll: 0.5, pick: 0)
+        check(broken.dirt == 0, "a finished task washes one layer off")
+        var budget = LifeState()
+        budget.dayKey = "2026-10-20"; budget.dayNudges = 8; budget.dayBackoff = ["nudge": 4]; budget.dismissedInRow = 2
+        _ = LifeRules.closeDay(&budget, today: "2026-10-21") { _ in true }
+        check(budget.dayNudges == 0 && budget.dayBackoff.isEmpty && budget.dismissedInRow == 0, "the reminder budget resets every day")
         var weekend = LifeState()
         weekend.dayKey = "2026-10-24"
         weekend.streak = 4
@@ -202,7 +239,7 @@ enum DevTools {
         i = MoodInputs()
         i.satiety = 0
         i.dirt = 3
-        check(MoodEngine.evaluate(i).mood == .annoyed, "starving and dirty pet is annoyed")
+        check(MoodEngine.evaluate(i).mood == .annoyed, "starving and dirty pet is worried")
 
         // Calm: interruptions wait for a pause and never break deep work.
         check(CalmRules.engaged(secondsSinceKey: 5, idleSeconds: 5, distracted: false), "typing in a work app = engaged")
@@ -263,6 +300,82 @@ enum DevTools {
         check(WishRules.stepContent("  Học 10 từ ") == "✨ Học 10 từ", "small step marked with ✨")
         let oldWish = try? JSONDecoder().decode(Wish.self, from: Data(#"{"title":"X"}"#.utf8))
         check(oldWish?.title == "X" && oldWish?.emoji == "🌟" && oldWish?.steps == 0, "saved wishes with missing fields still load")
+
+        // Where was I?
+        check(ResumeRules.workURL("https://u:p@docs.google.com/d/1?usp=sharing&access_token=abc&code=x#heading")
+              == "https://docs.google.com/d/1?usp=sharing", "resume link: no credentials, secrets or fragment")
+        check(ResumeRules.workURL("file:///etc/hosts") == nil && ResumeRules.workURL("javascript:alert(1)") == nil, "resume link: http(s) only")
+        check(ResumeRules.isSecretParam("X-Amz-Signature") && ResumeRules.isSecretParam("apiKey") && ResumeRules.isSecretParam("sessionid")
+              && !ResumeRules.isSecretParam("keyword") && !ResumeRules.isSecretParam("author"), "secret-looking query parameters")
+        let wctx = WorkContext(taskId: "1", taskTitle: "Report", app: "Google Chrome", bundle: "com.google.Chrome",
+                               pageTitle: "Q4 budget - Google Chrome", url: "https://docs.google.com/x", at: t0)
+        check(ResumeRules.whereText(wctx) == "Google Chrome — Q4 budget" && ResumeRules.host(wctx) == "docs.google.com",
+              "resume card: app — page title, and the host to reopen")
+        check(ResumeRules.shouldOffer(awayMinutes: 6) && !ResumeRules.shouldOffer(awayMinutes: 3)
+              && ResumeRules.shouldOffer(afterMeeting: true) && ResumeRules.shouldOffer(leftDistractionMinutes: 2.5),
+              "resume after 5+ min away, a meeting, or a 2+ min detour")
+        check(!ResumeRules.isWorkApp(bundle: "us.zoom.xos") && !ResumeRules.isWorkApp(bundle: "com.todopet.mochi")
+              && ResumeRules.isWorkApp(bundle: "com.microsoft.VSCode"), "calls and the pet itself are never where you were")
+
+        // Wrap up.
+        let at = { (h: Int, m: Int) in DayMath.at(hour: h, minute: m, on: t0) }
+        check(!WrapRules.canWrapUp(at(14, 59), workEnd: 18) && WrapRules.canWrapUp(at(15, 0), workEnd: 18)
+              && WrapRules.canWrapUp(at(13, 30), workEnd: 14), "wrap up from 15:00, or 30 min before work ends")
+        let friday = DateParse.parse("2026-10-30T17:00:00")!
+        check(DayMath.key(WrapRules.nextWorkday(after: friday) { cal.component(.weekday, from: $0) != 1 && cal.component(.weekday, from: $0) != 7 })
+              == "2026-11-02", "after Friday the next workday is Monday")
+        check(WrapRules.tidyNote("  open   the\nreport ") == "open the report" && WrapRules.tidyNote("   ") == nil, "tidy one-line note")
+        var frogDay = DaySnapshot()
+        frogDay.today = [TodoTask(id: "a", content: "Urgent", priority: 4), TodoTask(id: "b", content: "Frog", priority: 1)]
+        frogDay.frogId = "b"
+        check(frogDay.next?.id == "b", "tomorrow's frog goes first")
+
+        // Day load and strip.
+        let noon2 = DayMath.at(hour: 14, on: t0)
+        let meet = CalEvent(id: "m", title: "Họp ngân sách Q4", start: noon2.addingTimeInterval(3600), end: noon2.addingTimeInterval(7200), joinURL: nil)
+        var long = TodoTask(id: "t1", content: "Write report")
+        long.duration = TodoDuration(amount: 180, unit: "minute")
+        let short = TodoTask(id: "t2", content: "Reply to Lan")
+        let load = DayLoadRules.load(tasks: [long, short], events: [meet], now: noon2, workStart: 8, workEnd: 18, defaultMinutes: 30)
+        check(load.taskMinutes == 210 && load.meetingMinutes == 60 && load.capacity == 240 && load.overBy == 30
+              && DayLoadRules.level(load) == .tight, "load: 3h30 of tasks + 1h meeting in 4h left is tight")
+        let heavy = DayLoadRules.load(tasks: [long, short, TodoTask(id: "t3", content: "x")], events: [meet], now: noon2,
+                                      workStart: 8, workEnd: 18, defaultMinutes: 30)
+        check(DayLoadRules.isOverbooked(heavy) && DayLoadRules.level(heavy) == .over, "an hour past the time left is overbooked")
+        var timed = TodoTask(id: "t4", content: "Call", due: TodoDue(date: "x", datetime: DateParse.utcString(noon2.addingTimeInterval(3600))))
+        timed.duration = TodoDuration(amount: 30, unit: "minute")
+        let strip = DayLoadRules.strip(tasks: [timed], events: [meet], now: noon2, workStart: 8, workEnd: 18, defaultMinutes: 30)
+        check(strip.segments.count == 2 && strip.segments[0].kind == .meeting && strip.segments[1].lane == 1 && abs(strip.now - 0.6) < 0.001,
+              "day strip: overlapping blocks get their own row")
+        check(DayLoadRules.text(90) == "1h30" && DayLoadRules.text(45) == "45'", "durations read nicely")
+
+        // Meeting bookends.
+        let rel = RelatedTasks.related(to: "Họp: Đề xuất ngân sách Q4",
+                                       in: [TodoTask(id: "1", content: "Gửi email"), TodoTask(id: "2", content: "Sửa bảng ngân sách"),
+                                            TodoTask(id: "3", content: "Đề xuất ngân sách cho sếp")])
+        check(rel.map(\.id) == ["3", "2"], "related tasks: shared words, ignoring Vietnamese accents")
+        check(RelatedTasks.related(to: "Weekly team sync", in: [TodoTask(id: "1", content: "Team lunch")]).isEmpty,
+              "common meeting words don't link tasks")
+
+        // If-then starts.
+        let plan = { (tr: StartTrigger) in TaskTrigger(taskId: "1", taskTitle: "x", day: "2026-10-20", trigger: tr, setAt: t0) }
+        check(TriggerRules.due([plan(.afterMeeting(id: "m", title: "Standup"))], today: "2026-10-20", now: t0, endedMeetings: ["m"], front: nil).count == 1
+              && TriggerRules.due([plan(.afterMeeting(id: "m", title: "Standup"))], today: "2026-10-20", now: t0, endedMeetings: [], front: nil).isEmpty,
+              "start after a meeting: when it ends")
+        let figma = plan(.appOpens(name: "Figma", bundle: "com.figma.Desktop"))
+        check(TriggerRules.due([figma], today: "2026-10-20", now: t0, endedMeetings: [], front: ("com.figma.Desktop", t0.addingTimeInterval(-5))).isEmpty
+              && TriggerRules.due([figma], today: "2026-10-20", now: t0, endedMeetings: [], front: ("com.figma.Desktop", t0.addingTimeInterval(5))).count == 1,
+              "start when an app opens: only once it comes to the front after the plan")
+        var lunch = plan(.afterLunch)
+        check(TriggerRules.due([lunch], today: "2026-10-20", now: at(12, 0), endedMeetings: [], front: nil).isEmpty
+              && TriggerRules.due([lunch], today: "2026-10-20", now: at(13, 5), endedMeetings: [], front: nil).count == 1, "after lunch: from 13:00")
+        lunch.fired = true
+        check(TriggerRules.due([lunch], today: "2026-10-20", now: at(13, 5), endedMeetings: [], front: nil).isEmpty, "a plan fires once")
+        let choices = TriggerRules.choices(events: [meet], now: at(11, 0), recentApps: [("Xcode", "com.apple.dt.Xcode"), ("Figma", "com.figma.Desktop")],
+                                           frontBundle: "com.apple.dt.Xcode")
+        let wanted: [StartTrigger] = [.afterMeeting(id: "m", title: "Họp ngân sách Q4"), .appOpens(name: "Figma", bundle: "com.figma.Desktop"), .afterLunch]
+        check(choices == wanted,
+              "start-when menu: meetings ahead, recent apps (not the one in front), lunch")
         var anyLife = LifeState()
         check(LifeRules.feed(&anyLife, now: t0, roll: 0.5, pick: 0.99).kind != .blessing, "finishing a task never plays the blessing")
 
@@ -359,6 +472,34 @@ enum DevTools {
                 saveView(BubbleView(model: model), .aqua, url.appendingPathComponent("bubble-wish.png"))
             }
 
+            // Wrap up, lightening an overbooked day, "where was I?" and the meeting bookend.
+            for (sheet, file) in [(WrapSheet.wrapUp, "wrapup.png"), (.lighten, "lighten.png")] {
+                let st = BoardState()
+                st.wrapUp = sheet
+                saveView(BoardView(brain: brain, prefs: prefs, state: st).background(Color(nsColor: .windowBackgroundColor)), .aqua,
+                         url.appendingPathComponent(file))
+            }
+            let resume = WorkContext(taskId: brain.day.next?.id, taskTitle: brain.day.next?.title, app: "Google Chrome",
+                                     bundle: "com.google.Chrome", pageTitle: L("Báo cáo quý 4 - Google Docs", "Q4 report - Google Docs"),
+                                     url: "https://docs.google.com/document/d/1", note: L("viết phần kết luận", "write the conclusion"), at: Date())
+            let rm = BubbleModel()
+            rm.mood = .normal
+            rm.bubble = Bubble(text: Lines.resume(resume, why: Lines.resumeWhyAway(12)), actions: [
+                BubbleAction(title: L("Mở lại ↗", "Reopen ↗"), primary: true) {},
+                BubbleAction(title: "▶︎ " + L("Tập trung", "Focus")) {},
+                BubbleAction(title: L("Việc khác", "Something else")) {},
+            ])
+            saveView(BubbleView(model: rm), .aqua, url.appendingPathComponent("bubble-resume.png"))
+            let mm = BubbleModel()
+            mm.mood = .normal
+            let ev = CalEvent(id: "x", title: L("Họp team", "Team sync"), start: Date().addingTimeInterval(600), end: Date().addingTimeInterval(3600), joinURL: nil)
+            mm.bubble = Bubble(text: Lines.afterMeeting(ev) + "\n" + Lines.breather(minutes: 10, next: ev), actions: [
+                BubbleAction(title: L("＋ Việc tiếp theo", "＋ Next step"), primary: true) {},
+                BubbleAction(title: L("↩︎ Quay lại việc", "↩︎ Back to work")) {},
+                BubbleAction(title: L("Không có gì", "Nothing")) {},
+            ])
+            saveView(BubbleView(model: mm), .aqua, url.appendingPathComponent("bubble-meeting.png"))
+
             // A sample diary for the docs.
             let base = DayMath.at(hour: 9, on: Date())
             func at(_ minutes: Double) -> Date { base.addingTimeInterval(minutes * 60) }
@@ -376,8 +517,8 @@ enum DevTools {
                                 "“Hey! On youtube.com? 👀” — because on youtube.com for 2 min during work hours"), nil, nil),
                 (91.8, .response, L("Bạn không phản hồi (tự ẩn)", "No response (faded away)"), "ignored", nil),
                 (98, .distraction, L("Rời youtube.com sau 8 phút", "Left youtube.com after 8 minutes"), "end", 8),
-                (99, .mood, L("Tâm trạng: bình thường → đang nhăn nhó (điểm 41) — −21 đang xao nhãng với youtube.com",
-                              "Mood: chill → annoyed (score 41) — −21 distracted by youtube.com"), nil, nil),
+                (99, .mood, L("Tâm trạng: bình thường → đang lo lắng (điểm 41) — −21 đang xao nhãng với youtube.com",
+                              "Mood: chill → worried (score 41) — −21 distracted by youtube.com"), nil, nil),
             ]
             for (m, kind, text, tag, minutes) in sample { brain.log.add(kind, text, tag: tag, minutes: minutes, now: at(m)) }
             let logState = BoardState()
@@ -435,10 +576,33 @@ struct MoodSheet: View {
                     Text("held / petted").font(.system(size: 11, weight: .semibold, design: .rounded))
                 }
             }
+            HStack(spacing: 4) {
+                ForEach(Array(gestures.enumerated()), id: \.offset) { _, g in
+                    VStack(spacing: 0) {
+                        pet(gesturePose(g.0, g.1))
+                        Text(g.2).font(.system(size: 11, weight: .semibold, design: .rounded))
+                    }
+                }
+                VStack(spacing: 0) {
+                    pet({ var p = PetPose(mood: .normal, t: 0.6, hovered: true); p.hoverFor = 1.7; return p }())
+                    Text("slow blink").font(.system(size: 11, weight: .semibold, design: .rounded))
+                }
+            }
         }
         .padding(10)
         .background(Color.white)
         .foregroundColor(.black)
+    }
+
+    private let gestures: [(PetGesture.Kind, Double, String)] = [
+        (.wave, 0.3, "wave"), (.yawn, 0.5, "yawn"), (.shake, 0.2, "shake"), (.giggle, 0.4, "giggle"), (.dizzy, 0.4, "dizzy"),
+    ]
+
+    private func gesturePose(_ g: PetGesture.Kind, _ progress: Double) -> PetPose {
+        var p = PetPose(mood: .normal, t: 0.9)
+        p.gesture = g
+        p.gestureP = progress
+        return p
     }
 
     private func pet(_ pose: PetPose) -> some View {

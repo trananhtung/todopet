@@ -115,14 +115,47 @@ struct FeedResult {
     var cleaned: Bool
 }
 
+/// A broken streak that can come back: finish `LifeRules.repairTasks` tasks on a workday before `until`.
+struct RepairQuest: Codable, Equatable {
+    var streak: Int
+    /// Last day ("yyyy-MM-dd") the quest can be done.
+    var until: String
+    /// Today's tasks brought the streak back (it was `from` before); final when the day closes.
+    var restoredFrom: Int?
+}
+
+/// How a settled day went: `kept` (a task done on a day the app saw), `excused` (a packed calendar, nothing done),
+/// `frozen` (a missed workday, a snack saved the streak), `broken` (a missed workday) or `none` (a day off, or a day
+/// the app never saw).
+enum DayOutcome: String {
+    case kept, excused, frozen, broken, none
+}
+
+struct DayClose {
+    /// The day that was settled; "" when nothing was.
+    var day = ""
+    var outcome = DayOutcome.none
+    /// The streak a broken day ended.
+    var lost = 0
+    var snackEarned = false
+    var sticker = false
+    var repairOffered = false
+    var repairExpired = false
+    var unlocked: [Accessory] = []
+}
+
 /// Everything the pet remembers across days.
 struct LifeState: Codable, Equatable {
     var satiety: Double = 70
     var dirt = 0
     var xp = 0
     var totalDone = 0
+    /// Workdays in a row with at least one finished task (days off and days the Mac was off don't count).
     var streak = 0
     var bestStreak = 0
+    /// 🍪 in the stash (0–2): one saves the streak on a missed workday.
+    var snacks = 1
+    var repair: RepairQuest?
     var combo = 0
     var bestCombo = 0
     var goldens = 0
@@ -137,8 +170,19 @@ struct LifeState: Codable, Equatable {
     var dayPlanned = 0
     var dayTarget = 3
     var dayWorkday = true
+    /// Todoist answered today (a day the Mac was off never counts against you).
+    var daySeen = false
+    /// The calendar left less than an hour free: a day with nothing done is excused.
+    var dayBusy = false
     /// Seconds spent today in each distracting app or site.
     var distraction: [String: Double] = [:]
+    /// Unsolicited reminders shown today (the daily budget).
+    var dayNudges = 0
+    /// How much each repeating reminder is stretched today after being closed or ignored (×2, ×4, ×8).
+    var dayBackoff: [String: Int] = [:]
+    /// Reminders closed or ignored in a row; three hold the rest for an hour.
+    var dismissedInRow = 0
+    var nudgeHoldUntil: Date?
 
     init() {}
 
@@ -152,6 +196,8 @@ struct LifeState: Codable, Equatable {
         totalDone = try c.decodeIfPresent(Int.self, forKey: .totalDone) ?? d.totalDone
         streak = try c.decodeIfPresent(Int.self, forKey: .streak) ?? d.streak
         bestStreak = try c.decodeIfPresent(Int.self, forKey: .bestStreak) ?? d.bestStreak
+        snacks = min(LifeRules.maxSnacks, max(0, try c.decodeIfPresent(Int.self, forKey: .snacks) ?? d.snacks))
+        repair = try c.decodeIfPresent(RepairQuest.self, forKey: .repair)
         combo = try c.decodeIfPresent(Int.self, forKey: .combo) ?? d.combo
         bestCombo = try c.decodeIfPresent(Int.self, forKey: .bestCombo) ?? d.bestCombo
         goldens = try c.decodeIfPresent(Int.self, forKey: .goldens) ?? d.goldens
@@ -165,7 +211,13 @@ struct LifeState: Codable, Equatable {
         dayPlanned = try c.decodeIfPresent(Int.self, forKey: .dayPlanned) ?? d.dayPlanned
         dayTarget = try c.decodeIfPresent(Int.self, forKey: .dayTarget) ?? d.dayTarget
         dayWorkday = try c.decodeIfPresent(Bool.self, forKey: .dayWorkday) ?? d.dayWorkday
+        daySeen = try c.decodeIfPresent(Bool.self, forKey: .daySeen) ?? d.daySeen
+        dayBusy = try c.decodeIfPresent(Bool.self, forKey: .dayBusy) ?? d.dayBusy
         distraction = try c.decodeIfPresent([String: Double].self, forKey: .distraction) ?? d.distraction
+        dayNudges = try c.decodeIfPresent(Int.self, forKey: .dayNudges) ?? d.dayNudges
+        dayBackoff = try c.decodeIfPresent([String: Int].self, forKey: .dayBackoff) ?? d.dayBackoff
+        dismissedInRow = try c.decodeIfPresent(Int.self, forKey: .dismissedInRow) ?? d.dismissedInRow
+        nudgeHoldUntil = try c.decodeIfPresent(Date.self, forKey: .nudgeHoldUntil)
     }
 
     /// A pet with some history, for `--demo` and screenshots.
@@ -176,6 +228,7 @@ struct LifeState: Codable, Equatable {
         s.totalDone = 31
         s.streak = 4
         s.bestStreak = 4
+        s.snacks = 1
         s.bestCombo = 2
         s.goldens = 1
         s.unlocked = ["bow", "scarf", "tophat"]
@@ -245,54 +298,137 @@ enum LifeRules {
         s.satiety = max(0, s.satiety - hungerPerHour * min(now.timeIntervalSince(last), 3600) / 3600)
     }
 
-    static func syncDay(_ s: inout LifeState, completed: Int, planned: Int, target: Int, workday: Bool) {
+    static let maxSnacks = 2
+    /// Finished tasks that bring a broken streak back, on a workday within `repairDays` of the break.
+    static let repairTasks = 2
+    static let repairDays = 14
+    static let maxBackoff = 8
+
+    /// Records today as seen after a Todoist sync. A packed calendar stays packed for the day.
+    static func syncDay(_ s: inout LifeState, completed: Int, planned: Int, target: Int, workday: Bool, busy: Bool = false) {
         s.dayCompleted = completed
         s.dayPlanned = planned
         s.dayTarget = target
         s.dayWorkday = workday
+        s.dayBusy = s.dayBusy || busy
+        s.daySeen = true
+    }
+
+    /// The repair quest today can finish: a workday no later than its last day.
+    static func activeRepair(_ s: LifeState) -> RepairQuest? {
+        guard let r = s.repair, s.dayWorkday, s.dayKey <= r.until else { return nil }
+        return r
+    }
+
+    /// After a sync: the old streak is back while today has `repairTasks` finished tasks, and goes back if the count
+    /// drops again (an Undo). `closeDay` makes it final. Returns true when the streak just came back.
+    @discardableResult
+    static func checkRepair(_ s: inout LifeState) -> Bool {
+        guard let quest = s.repair else { return false }
+        let done = activeRepair(s) != nil && s.dayCompleted >= repairTasks
+        if done && quest.restoredFrom == nil {
+            s.repair?.restoredFrom = s.streak
+            s.streak = max(s.streak, quest.streak)
+            s.bestStreak = max(s.bestStreak, s.streak)
+            return true
+        }
+        if !done, let from = quest.restoredFrom {
+            s.streak = from
+            s.repair?.restoredFrom = nil
+        }
+        return false
     }
 
     static func addDistraction(_ s: inout LifeState, label: String, seconds: Double) {
         s.distraction[label, default: 0] += seconds
     }
 
-    /// Settles the stored day once the date changed: streak, perfect-day sticker, and dirt for lazy workdays.
-    /// Workdays the app never saw (Mac off) count as lazy too.
-    static func closeDay(_ s: inout LifeState, today: String, isWorkday: (String) -> Bool) -> [Accessory] {
+    /// Settles the stored day once the date changed. Forgiving: on any day the app saw, one finished task keeps the
+    /// streak; a goal day adds a 🍪 snack, a perfect day a sticker. A missed workday eats a snack if there is a streak
+    /// to save, or breaks it (dirt, and a repair quest for streaks of 2+). Days the app never saw (Mac off), days off
+    /// and packed calendar days with nothing done change nothing.
+    static func closeDay(_ s: inout LifeState, today: String, isWorkday: (String) -> Bool) -> DayClose {
+        var r = DayClose()
         guard !s.dayKey.isEmpty, s.dayKey < today else {
             if s.dayKey.isEmpty { s.dayKey = today }
-            return []
+            return r
         }
-        if s.dayWorkday {
+        r.day = s.dayKey
+        let seen = s.daySeen
+        let missed = seen && s.dayWorkday && s.dayCompleted == 0
+        // The quest's day is over: with enough tasks done the old streak stays back, otherwise it goes back.
+        let quest = seen ? activeRepair(s) : nil
+        if let rq = s.repair {
+            let base = rq.restoredFrom ?? s.streak
+            if quest != nil && s.dayCompleted >= repairTasks {
+                s.streak = max(base, rq.streak)
+                s.repair = nil
+            } else {
+                s.streak = base
+                s.repair?.restoredFrom = nil
+            }
+        }
+        var broke = 0
+        if seen && s.dayCompleted > 0 {
+            r.outcome = .kept
+            s.streak += 1
+            s.bestStreak = max(s.bestStreak, s.streak)
             if s.dayTarget > 0 && s.dayCompleted >= s.dayTarget {
-                s.streak += 1
-                s.bestStreak = max(s.bestStreak, s.streak)
+                r.snackEarned = addSnack(&s)
                 if s.dayCompleted >= s.dayPlanned {
+                    r.sticker = true
                     s.perfectDays.append(s.dayKey)
                     s.xp += 30
                 }
-            } else {
-                s.streak = 0
-                if s.dayCompleted == 0 { s.dirt = min(3, s.dirt + 1) }
             }
+        } else if missed && s.dayBusy {
+            r.outcome = .excused
+        } else if missed && s.streak > 0 && s.snacks > 0 {
+            r.outcome = .frozen
+            s.snacks -= 1
+        } else if missed {
+            r.outcome = .broken
+            r.lost = s.streak
+            broke = s.streak
+            s.dirt = min(3, s.dirt + 1)
+            s.streak = 0
         }
-        var day = nextDay(s.dayKey)
-        var guardCount = 0
-        while day < today && guardCount < 30 {
-            if isWorkday(day) {
-                s.streak = 0
-                s.dirt = min(3, s.dirt + 1)
-            }
-            day = nextDay(day)
-            guardCount += 1
+        // An unfinished quest ends with its day (a busy day doesn't use it up), and after its last day at the latest.
+        if let rq = s.repair, (quest != nil && r.outcome != .excused) || today > rq.until {
+            s.repair = nil
+            r.repairExpired = true
+        }
+        let until = addDays(r.day, repairDays)
+        if broke >= 2 && until >= today {
+            s.repair = RepairQuest(streak: broke, until: until)
+            r.repairOffered = true
         }
         s.dayKey = today
         s.dayCompleted = 0
         s.dayPlanned = 0
+        s.dayWorkday = isWorkday(today)
+        s.daySeen = false
+        s.dayBusy = false
         s.combo = 0
         s.distraction = [:]
+        s.dayNudges = 0
+        s.dayBackoff = [:]
+        s.dismissedInRow = 0
+        s.nudgeHoldUntil = nil
         s.perfectDays = Array(s.perfectDays.suffix(60))
-        return checkUnlocks(&s)
+        r.unlocked = checkUnlocks(&s)
+        return r
+    }
+
+    private static func addSnack(_ s: inout LifeState) -> Bool {
+        guard s.snacks < maxSnacks else { return false }
+        s.snacks += 1
+        return true
+    }
+
+    static func addDays(_ key: String, _ n: Int) -> String {
+        guard let d = DateParse.parse(key), let x = Calendar.current.date(byAdding: .day, value: n, to: d) else { return key }
+        return DayMath.key(x)
     }
 
     static func nextDay(_ key: String) -> String {

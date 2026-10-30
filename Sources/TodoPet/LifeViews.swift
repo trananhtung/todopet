@@ -23,7 +23,13 @@ struct LifeBar: View {
                 }
                 if s.streak > 0 {
                     Text("🔥 \(s.streak)").font(.caption.bold())
-                        .help(L("Chuỗi ngày đạt mục tiêu", "Days in a row hitting your target"))
+                        .help(L("Chuỗi ngày làm việc có ít nhất 1 việc xong (ngày nghỉ, ngày tắt máy không tính)",
+                                "Workdays in a row with at least one task done (days off and days the Mac was off don't count)"))
+                }
+                if s.snacks > 0 {
+                    Text(String(repeating: "🍪", count: s.snacks)).font(.caption)
+                        .help(L("Bánh dự phòng: lỡ một ngày làm việc thì 1 bánh giữ chuỗi cho bạn. Ngày đạt mục tiêu được thêm bánh (tối đa \(LifeRules.maxSnacks)).",
+                                "Spare snacks: a missed workday eats one instead of your streak. Goal days add one (up to \(LifeRules.maxSnacks))."))
                 }
                 Spacer()
                 Button {
@@ -50,6 +56,13 @@ struct LifeBar: View {
                     Text("\(s.xp) XP · MAX").font(.caption2.monospacedDigit()).foregroundColor(.secondary)
                     Spacer()
                 }
+            }
+            if let r = LifeRules.activeRepair(s) {
+                let done = min(s.dayCompleted, LifeRules.repairTasks)
+                Text("🔧 " + (r.restoredFrom != nil
+                    ? L("Đã nối lại chuỗi \(s.streak) ngày!", "Your \(s.streak)-day streak is back!")
+                    : L("Nối lại chuỗi \(r.streak) ngày: xong \(done)/\(LifeRules.repairTasks) việc hôm nay", "Mend your \(r.streak)-day streak: \(done)/\(LifeRules.repairTasks) tasks today")))
+                    .font(.caption2).foregroundColor(.orange)
             }
             if s.distractionTotal >= 60 {
                 let top = s.distraction.sorted { $0.value > $1.value }.prefix(3)

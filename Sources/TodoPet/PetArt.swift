@@ -16,6 +16,11 @@ struct PetPose {
 
     /// You're typing or in the zone: keep movements small.
     var calm = false
+    /// A little gesture in progress (wave, yawn, shake, giggle, dizzy) and how far along it is (0…1).
+    var gesture: PetGesture.Kind?
+    var gestureP: Double = 0
+    /// Seconds the cursor has been resting on the pet (petting).
+    var hoverFor: Double = 0
 
     // Life: growth, hunger, dirt, accessories.
     var stageScale: Double = 1
@@ -151,6 +156,23 @@ enum PetArt {
             breathe = CGFloat(sin(t * 1.3)) * 0.04
             squash = 0.06
         }
+        if !celebrating, let g = p.gesture {
+            let fade = CGFloat(1 - p.gestureP)
+            switch g {
+            case .shake:
+                shakeX = CGFloat(sin(t * 55)) * 3.4 * fade
+                jump = 0
+            case .giggle:
+                jump = abs(CGFloat(sin(t * 15))) * 3
+                squash = CGFloat(sin(t * 15)) * 0.03
+            case .dizzy:
+                shakeX = CGFloat(sin(t * 3.5)) * 4 * fade
+            case .yawn:
+                squash = -0.08 * CGFloat(sin(p.gestureP * .pi))
+            case .wave:
+                break
+            }
+        }
         if p.calm && !celebrating {
             // Motion at the edge of your vision pulls attention: tone it down while you work.
             jump *= 0.3
@@ -191,7 +213,9 @@ enum PetArt {
             liftL = max(0, CGFloat(sin(p.walkPhase))) * 5
             liftR = max(0, CGFloat(-sin(p.walkPhase))) * 5
         } else if mood == .annoyed {
-            liftR = sin(t * 0.9) > 0 ? max(0, CGFloat(sin(t * 9))) * 3 : 0   // impatient tapping
+            // Worried: shifting from foot to foot.
+            liftL = max(0, CGFloat(sin(t * 1.6))) * 1.4
+            liftR = max(0, CGFloat(-sin(t * 1.6))) * 1.4
         } else if mood == .angry {
             liftL = max(0, CGFloat(sin(t * 5))) * 3
             liftR = max(0, CGFloat(-sin(t * 5))) * 3
@@ -310,6 +334,34 @@ enum PetArt {
                 ctx.fill(Path(ellipseIn: CGRect(x: x - 2, y: ey - 1.5, width: 4, height: 4)), with: .color(ink))
                 continue
             }
+            if let g = p.gesture, !celebrating {
+                switch g {
+                case .wave, .giggle: arcEye(x, up: true)
+                case .yawn: arcEye(x, up: false)
+                case .shake:
+                    // Squeezed shut: > <
+                    var e = Path()
+                    e.move(to: CGPoint(x: x - side * 4, y: ey - 4))
+                    e.addLine(to: CGPoint(x: x + side * 3, y: ey))
+                    e.addLine(to: CGPoint(x: x - side * 4, y: ey + 4))
+                    ctx.stroke(e, with: .color(ink), style: StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round))
+                case .dizzy:
+                    var sp = Path()
+                    for i in 0...28 {
+                        let a = Double(i) / 28 * 4 * .pi + t * 6 * Double(side)
+                        let r = CGFloat(i) / 28 * 5.5
+                        let pt = CGPoint(x: x + CGFloat(cos(a)) * r, y: ey + CGFloat(sin(a)) * r)
+                        if i == 0 { sp.move(to: pt) } else { sp.addLine(to: pt) }
+                    }
+                    ctx.stroke(sp, with: .color(ink), style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
+                }
+                continue
+            }
+            // Petting: after a moment the pet slow-blinks like a content cat.
+            if petted, p.hoverFor > 1.2, (p.hoverFor - 1.2).truncatingRemainder(dividingBy: 3.2) < 1.4 {
+                arcEye(x, up: false)
+                continue
+            }
             switch mood {
             case .happy: arcEye(x, up: true)
             case .celebrating where p.celebration == .blessing: arcEye(x, up: true)
@@ -323,15 +375,12 @@ enum PetArt {
                 roundEye(x, w: 8, h: 8)
                 brow(x, side: -side, inner: 7.5, outer: 9.5, width: 2.4)
             case .annoyed:
-                ctx.drawLayer { c in
-                    c.clip(to: Path(CGRect(x: x - 6, y: ey - 0.5, width: 12, height: 8)))
-                    c.fill(Path(ellipseIn: CGRect(x: x - 4, y: ey - 5, width: 8, height: 10)), with: .color(ink))
+                // Worried: big glossy eyes and brows raised in the middle.
+                roundEye(x, w: 8.5, h: 10.5)
+                if !blink {
+                    ctx.fill(Path(ellipseIn: CGRect(x: x + 0.8, y: ey + 1.8, width: 2.2, height: 2.2)), with: .color(.white.opacity(0.9)))
                 }
-                var lid = Path()
-                lid.move(to: CGPoint(x: x - 5.5, y: ey - 0.5 - side * 0.8))
-                lid.addLine(to: CGPoint(x: x + 5.5, y: ey - 0.5 + side * 0.8))
-                ctx.stroke(lid, with: .color(ink), style: StrokeStyle(lineWidth: 2.4, lineCap: .round))
-                brow(x, side: -side, inner: 7, outer: 9, width: 2)
+                brow(x, side: -side, inner: 12, outer: 8.5, width: 2)
             case .angry:
                 ctx.fill(Path(ellipseIn: CGRect(x: x - 3.5, y: ey - 3, width: 7, height: 8)), with: .color(ink))
                 brow(x, side: -side, inner: 4.5, outer: 11, width: 3.2)
@@ -345,6 +394,26 @@ enum PetArt {
         let tongue = RGBA(0xFF7A8A).color
         if p.held {
             ctx.fill(Path(ellipseIn: CGRect(x: fx - 3, y: my - 1, width: 6, height: 7)), with: .color(mouthDark))
+        } else if let g = p.gesture, !celebrating {
+            switch g {
+            case .yawn:
+                let o = CGFloat(sin(p.gestureP * .pi))
+                let r = CGRect(x: fx - 4 - 2 * o, y: my - 2, width: 8 + 4 * o, height: 3 + 10 * o)
+                ctx.fill(Path(ellipseIn: r), with: .color(mouthDark))
+                ctx.stroke(Path(ellipseIn: r), with: .color(pal.line.color), lineWidth: 1.4)
+            case .dizzy, .shake:
+                var w = Path()
+                w.move(to: CGPoint(x: fx - 6, y: my + 2))
+                w.addCurve(to: CGPoint(x: fx + 6, y: my + 2), control1: CGPoint(x: fx - 2, y: my - 2), control2: CGPoint(x: fx + 2, y: my + 6))
+                ctx.stroke(w, with: .color(pal.line.color), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            case .wave, .giggle:
+                var m = Path()
+                m.move(to: CGPoint(x: fx - 6, y: my - 1))
+                m.addQuadCurve(to: CGPoint(x: fx + 6, y: my - 1), control: CGPoint(x: fx, y: my + 10))
+                m.closeSubpath()
+                ctx.fill(m, with: .color(mouthDark))
+                ctx.stroke(m, with: .color(pal.line.color), style: StrokeStyle(lineWidth: 1.6, lineJoin: .round))
+            }
         } else {
             switch mood {
             case .normal where !petted, .focus:
@@ -404,6 +473,14 @@ enum PetArt {
             for side in [-1.0, 1.0] as [CGFloat] {
                 arm(CGPoint(x: cx + side * bw * 0.52, y: top + bh * 0.32), side * (2.4 + CGFloat(sin(t * 14)) * 0.3))
             }
+        } else if p.gesture == .wave && !celebrating {
+            arm(CGPoint(x: cx - bw * 0.5, y: shoulderY), 0.35)
+            arm(CGPoint(x: cx + bw * 0.52, y: top + bh * 0.22), -2.5 + CGFloat(sin(t * 11)) * 0.55)
+        } else if p.gesture == .yawn && !celebrating {
+            let up = CGFloat(sin(p.gestureP * .pi))
+            for side in [-1.0, 1.0] as [CGFloat] {
+                arm(CGPoint(x: cx + side * bw * 0.5, y: shoulderY - up * bh * 0.2), side * (0.35 + 2.3 * up))
+            }
         } else {
             switch mood {
             case .celebrating where p.celebration == .blessing:
@@ -424,13 +501,10 @@ enum PetArt {
                 arm(CGPoint(x: cx - bw * 0.5, y: shoulderY), 0.35)
                 arm(CGPoint(x: cx + bw * 0.52, y: top + bh * 0.3), -2.3 + CGFloat(sin(t * 8)) * 0.45)
             case .annoyed where !p.walking:
-                // Crossed arms.
-                for (a, b) in [(CGPoint(x: cx - bw * 0.38, y: by - bh * 0.14), CGPoint(x: cx + bw * 0.14, y: by - bh * 0.05)),
-                               (CGPoint(x: cx + bw * 0.38, y: by - bh * 0.14), CGPoint(x: cx - bw * 0.14, y: by - bh * 0.05))] {
-                    var l = Path(); l.move(to: a); l.addLine(to: b)
-                    ctx.stroke(l, with: .color(pal.line.color), style: StrokeStyle(lineWidth: 12, lineCap: .round))
-                    ctx.stroke(l, with: .color(armFill), style: StrokeStyle(lineWidth: 8, lineCap: .round))
-                }
+                // Worried: hands held together in front, fidgeting.
+                let f = CGFloat(sin(t * 3)) * 0.15
+                arm(CGPoint(x: cx - bw * 0.25, y: by - bh * 0.1), 1.1 + f, w: 9, h: 12)
+                arm(CGPoint(x: cx + bw * 0.25, y: by - bh * 0.1), -1.1 - f, w: 9, h: 12)
             case .angry:
                 for side in [-1.0, 1.0] as [CGFloat] {
                     let shake = CGFloat(sin(t * 20 + Double(side))) * 2
@@ -520,6 +594,32 @@ enum PetArt {
         }
 
         ctx = world
+
+        // Gesture and petting effects.
+        if !celebrating {
+            switch p.gesture {
+            case .dizzy?:
+                for i in 0..<3 {
+                    let a = t * 4 + Double(i) / 3 * 2 * .pi
+                    let pt = CGPoint(x: cx + CGFloat(cos(a)) * bw * 0.36, y: top - 2 + CGFloat(sin(a)) * 4)
+                    ctx.fill(sparkle(at: pt, r: 3.5), with: .color(RGBA(0xFFC93C).color))
+                }
+            case .giggle?:
+                let rise = CGFloat(p.gestureP) * 16
+                ctx.draw(Text("♪").font(.system(size: 12, weight: .bold)).foregroundColor(RGBA(0xFF6F96).color),
+                         at: CGPoint(x: cx + bw * 0.42, y: top + 4 - rise))
+            case .yawn?:
+                ctx.draw(Text("～").font(.system(size: 10)).foregroundColor(pal.line.color.opacity(0.6)),
+                         at: CGPoint(x: cx + bw * 0.45, y: top + 8 - CGFloat(p.gestureP) * 8))
+            default:
+                break
+            }
+            if petted, p.hoverFor > 1.5 {
+                let ph = (p.hoverFor - 1.5).truncatingRemainder(dividingBy: 1.8) / 1.8
+                ctx.draw(Text("♥").font(.system(size: 11)).foregroundColor(RGBA(0xFF6F96).color.opacity(1 - ph)),
+                         at: CGPoint(x: cx - bw * 0.36, y: top + 6 - CGFloat(ph) * 18))
+            }
+        }
 
         // Effects.
         switch mood {

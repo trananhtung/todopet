@@ -40,10 +40,10 @@ enum Lines {
                          ("Không có kế hoạch = không có tiến độ! Thêm \(k) việc NGAY 💢",
                           "No plan = no progress! Add \(k) tasks NOW 💢")])
         case .annoyed:
-            return pick([("Này… hôm nay vẫn chưa đủ \(target) việc đâu nha 😒 (\(planned)/\(target))",
-                          "Hey… still not \(target) tasks for today 😒 (\(planned)/\(target))"),
-                         ("Hôm nay làm gì vậy? Mình vẫn chờ \(k) việc nữa đó 😑",
-                          "So what are we doing today? Still waiting for \(k) more 😑")])
+            return pick([("Mình hơi lo… hôm nay mới có \(planned)/\(target) việc 🥺 Chọn thêm \(k) việc nhỏ thôi nhé?",
+                          "I'm a little worried… only \(planned)/\(target) planned 🥺 Pick \(k) small ones?"),
+                         ("Chưa biết bắt đầu từ đâu? Thêm 1 việc dễ trước, mình giúp phần còn lại 🌱",
+                          "Not sure where to start? Add one easy task first, I'll help with the rest 🌱")])
         default:
             return pick([("Hôm nay mình làm \(target) việc gì nào? Mới có \(planned)/\(target) việc 📝",
                           "What are our \(target) things today? \(planned)/\(target) planned 📝"),
@@ -58,9 +58,10 @@ enum Lines {
             return pick([("Đang ngon trớn! Tiếp theo là \(q(next)) nha ✨", "On a roll! Next up: \(q(next)) ✨"),
                          ("Mình thích nhịp này! Làm luôn \(q(next)) nhé 💪", "Love this pace! Let's do \(q(next)) 💪")])
         case .annoyed:
-            return pick([("Ừm… \(q(next)) vẫn nằm đó. Làm 10 phút thôi cũng được mà 😑",
-                          "Ahem… \(q(next)) is still waiting. Even 10 minutes helps 😑"),
-                         ("Mình hơi buồn đó… bắt đầu \(q(next)) đi 😒", "I'm a bit sad… start \(q(next)) 😒")])
+            return pick([("Mình hơi lo cho \(q(next))… Thử 10 phút thôi, mình ngồi canh cho 🥺",
+                          "I'm a bit worried about \(q(next))… Just 10 minutes? I'll keep watch 🥺"),
+                         ("Kẹt ở \(q(next)) hả? Thử 2 phút hoặc chia nhỏ nó ra nhé 🌱",
+                          "Stuck on \(q(next))? Try 2 minutes, or split it up 🌱")])
         case .angry:
             let h = max(1, Int(hoursIdle.rounded()))
             return pick([("\(h) tiếng rồi chưa xong việc nào! Làm \(q(next)) NGAY 😠",
@@ -77,7 +78,8 @@ enum Lines {
         if mood == .angry {
             return L("\(count) việc QUÁ HẠN kìa!! 💢 Làm hoặc dời đi chứ!", "\(count) OVERDUE tasks!! 💢 Do them or move them!")
         }
-        return L("Có \(count) việc quá hạn 😬 Làm luôn hay dời vào hôm nay?", "\(count) overdue task(s) 😬 Do them or move to today?")
+        return L("Có \(count) việc quá hạn 😟 Không sao đâu: kéo vào hôm nay, hoặc bắt đầu lại từ mai cho nhẹ đầu 🌱",
+                 "\(count) overdue task(s) 😟 It's okay: pull them into today, or make a fresh start tomorrow 🌱")
     }
 
     static func distraction(mood: Mood, app: String, left: Int, next: TodoTask?) -> String {
@@ -101,11 +103,6 @@ enum Lines {
     static func allDone() -> String {
         L("Xong hết việc hôm nay rồi! 🎉 Nghỉ ngơi, hoặc chọn sẵn 3 việc cho mai nhé.",
           "Everything's done for today! 🎉 Rest, or pick tomorrow's 3 tasks.")
-    }
-
-    static func review(completed: Int, planned: Int, remaining: Int) -> String {
-        L("Sắp hết giờ làm. Hôm nay xong \(completed)/\(planned) việc. Còn \(remaining) việc — dời sang mai?",
-          "Almost end of day: \(completed)/\(planned) done. Move the remaining \(remaining) to tomorrow?")
     }
 
     static func welcomeBack(_ t: TodoTask) -> String {
@@ -246,9 +243,11 @@ enum Lines {
         return satiety < 10 ? L("Đói lả rồi… 😵‍💫", "Starving… 😵‍💫") + n : L("Bụng mình réo rồi nè 🍙", "My tummy is rumbling 🍙") + n
     }
 
-    static func grumble(_ next: TodoTask) -> String {
-        pick([("Haizzz… 😮‍💨 \(q(next)) vẫn chưa ai đụng tới.", "Sigh… 😮‍💨 Nobody has touched \(q(next)) yet."),
-              ("*giậm chân* Mình chờ \(q(next)) lâu lắm rồi đó 😤", "*stomps* I've been waiting for \(q(next)) forever 😤")])
+    static func grumble(_ next: TodoTask, app: String) -> String {
+        pick([("Haizzz… 😮‍💨 \(app) lâu rồi đó, \(q(next)) vẫn chưa ai đụng tới.",
+               "Sigh… 😮‍💨 Still on \(app), and nobody has touched \(q(next)) yet."),
+              ("*giậm chân* Tắt \(app) đi mà, mình chờ \(q(next)) lâu lắm rồi 😤",
+               "*stomps* Close \(app), I've been waiting for \(q(next)) forever 😤")])
     }
 
     static func parade(_ next: TodoTask) -> String {
@@ -333,5 +332,118 @@ enum Lines {
             ("Mẹo: uống nước & đứng dậy vươn vai sau mỗi phiên tập trung 💧",
              "Tip: drink water and stretch after each focus session 💧"),
         ])
+    }
+
+    // MARK: - Kind streaks
+
+    static func freshStart(moved: Int, repeating: Int) -> String {
+        repeating == 0
+            ? L("🌱 Bắt đầu lại nhé! Đã dời \(moved) việc quá hạn sang mai, hôm nay nhẹ hơn rồi.",
+                "🌱 Fresh start! Moved \(moved) overdue task(s) to tomorrow. Today is a clean slate.")
+            : L("🌱 Bắt đầu lại nhé! Đã dời \(moved) việc quá hạn sang mai. Việc lặp lại vẫn giữ lịch của nó.",
+                "🌱 Fresh start! Moved \(moved) overdue task(s) to tomorrow. Repeating tasks stay put.")
+    }
+
+    static func dayClosed(_ r: DayClose, streak: Int, snacks: Int) -> String? {
+        switch r.outcome {
+        case .frozen:
+            return L("🍪 Hôm qua chưa xong việc nào, nhưng mình dùng 1 bánh để giữ chuỗi \(streak) ngày cho bạn. Còn \(snacks) bánh.",
+                     "🍪 Nothing got done yesterday, so I used a snack to keep your \(streak)-day streak. \(snacks) left.")
+        case .broken where r.repairOffered:
+            return L("Chuỗi \(r.lost) ngày bị đứt rồi 😢 Không sao: hôm nay xong \(LifeRules.repairTasks) việc là mình nối lại cho!",
+                     "Your \(r.lost)-day streak broke 😢 No worries: finish \(LifeRules.repairTasks) tasks today and I'll mend it!")
+        case .excused:
+            return L("Hôm qua lịch họp kín mít nên không tính nhé, chuỗi vẫn giữ 💼", "Yesterday was packed with meetings, so it doesn't count. Streak kept 💼")
+        default:
+            return nil
+        }
+    }
+
+    static func streakRepaired(_ n: Int) -> String {
+        L("🔧🔥 Nối lại chuỗi \(n) ngày rồi! Giỏi quá!", "🔧🔥 Your \(n)-day streak is back! Well done!")
+    }
+
+    // MARK: - Where was I?
+
+    static func resume(_ c: WorkContext, why: String) -> String {
+        var lines = [why]
+        if let t = c.taskTitle {
+            lines.append((c.taskIsNext ? L("Việc tiếp theo: ", "Next up: ") : L("Bạn đang làm: ", "You were on: ")) + "“\(TextClean.short(t))”")
+        }
+        if let w = ResumeRules.whereText(c) { lines.append("↗ " + w) }
+        if let n = c.note { lines.append("📌 " + n) }
+        return lines.joined(separator: "\n")
+    }
+
+    static func resumeWhyAway(_ minutes: Int) -> String {
+        L("Bạn về rồi! 👋 (vắng \(minutes) phút)", "Welcome back! 👋 (\(minutes) min away)")
+    }
+    static func resumeWhyDetour(_ label: String) -> String {
+        L("Xong \(label) rồi hả? Mình đang làm dở cái này nè 👇", "Done with \(label)? Here's where you were 👇")
+    }
+
+    // MARK: - Meeting bookends
+
+    static func related(_ tasks: [TodoTask]) -> String {
+        L("Liên quan: ", "Related: ") + tasks.map { "• " + TextClean.short($0.title, 36) }.joined(separator: "  ")
+    }
+
+    static func afterMeeting(_ e: CalEvent) -> String {
+        L("“\(TextClean.short(e.title, 30))” xong rồi! Có gì cần ghi lại thành việc không? ✍️",
+          "“\(TextClean.short(e.title, 30))” is over! Anything to capture as a task? ✍️")
+    }
+
+    static func breather(minutes: Int, next: CalEvent) -> String {
+        L("Còn \(minutes) phút tới “\(TextClean.short(next.title, 24))”: đứng dậy, uống nước 5 phút nhé 💧",
+          "\(minutes) min until “\(TextClean.short(next.title, 24))”: stand up and grab some water for 5 minutes 💧")
+    }
+
+    // MARK: - Wrap up
+
+    static func review(completed: Int, remaining: Int) -> String {
+        L("Sắp hết giờ làm 🌇 Hôm nay xong \(completed) việc. Đóng ngày nhé: chọn việc dời, chọn con ếch cho mai, rồi nghỉ.",
+          "Almost end of day 🌇 \(completed) done today. Let's wrap up: move what's left, pick tomorrow's frog, then rest.")
+    }
+
+    static func doneForToday(frog: String?) -> String {
+        if let frog {
+            return L("Xong ngày rồi! 🌙 Mai mình bắt đầu với “\(TextClean.short(frog, 34))”. Ngủ ngon nha.",
+                     "Done for today! 🌙 Tomorrow we start with “\(TextClean.short(frog, 34))”. Sleep well.")
+        }
+        return L("Xong ngày rồi! 🌙 Nghỉ ngơi thật tốt nhé.", "Done for today! 🌙 Rest well.")
+    }
+
+    static func morningPlan(frog: TodoTask?, note: String?) -> String? {
+        var parts: [String] = []
+        if let frog { parts.append(L("🐸 Con ếch hôm qua bạn chọn: \(q(frog))", "🐸 The frog you picked yesterday: \(q(frog))")) }
+        if let note { parts.append(L("📝 Lời nhắn từ hôm qua: “\(note)”", "📝 Your note from yesterday: “\(note)”")) }
+        return parts.isEmpty ? nil : parts.joined(separator: "\n")
+    }
+
+    // MARK: - Overbooked
+
+    static func overbooked(_ l: DayLoad) -> String {
+        L("Hôm nay hơi quá tải 😟 ~\(DayLoadRules.text(l.taskMinutes)) việc + \(DayLoadRules.text(l.meetingMinutes)) họp, mà chỉ còn \(DayLoadRules.text(l.capacity)). Dời bớt vài việc cho nhẹ nhé?",
+          "Today looks overbooked 😟 ~\(DayLoadRules.text(l.taskMinutes)) of tasks + \(DayLoadRules.text(l.meetingMinutes)) of meetings, with \(DayLoadRules.text(l.capacity)) left. Move a few?")
+    }
+
+    // MARK: - If-then starts and the 2-minute starter
+
+    static func triggerFired(_ t: TodoTask, _ trigger: StartTrigger) -> String {
+        L("⏰ Tới lúc rồi! Bạn hẹn bắt đầu \(q(t)) \(trigger.label).", "⏰ It's time! You planned to start \(q(t)) \(trigger.label).")
+    }
+
+    static func triggerSet(_ t: TodoTask, _ trigger: StartTrigger) -> String {
+        L("Ok! Mình sẽ nhắc \(q(t)) \(trigger.label) 👍", "Got it! I'll bring up \(q(t)) \(trigger.label) 👍")
+    }
+
+    static func starterStart(_ t: TodoTask?) -> String {
+        if let t { return L("Chỉ 2 phút thôi: mở \(q(t)) ra và làm bước đầu tiên ⏱", "Just 2 minutes: open \(q(t)) and do the first bit ⏱") }
+        return L("Chỉ 2 phút thôi, bắt đầu nào ⏱", "Just 2 minutes. Go ⏱")
+    }
+
+    static func starterEnd(_ t: TodoTask?) -> String {
+        L("2 phút xong! Bắt đầu được là khó nhất rồi đó 💪 Làm tiếp một phiên không?",
+          "2 minutes done! Starting was the hard part 💪 Keep going for a full session?")
     }
 }

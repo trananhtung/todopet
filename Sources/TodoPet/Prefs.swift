@@ -31,7 +31,7 @@ final class Prefs: ObservableObject {
     @Published var dailyTarget: Int { didSet { d.set(dailyTarget, forKey: "dailyTarget") } }
     @Published var workStart: Int { didSet { d.set(workStart, forKey: "workStart") } }
     @Published var workEnd: Int { didSet { d.set(workEnd, forKey: "workEnd") } }
-    /// After this hour the pet gets grumpy if today is not planned yet.
+    /// After this hour the pet worries if today is not planned yet.
     @Published var planDeadline: Int { didSet { d.set(planDeadline, forKey: "planDeadline") } }
     @Published var remindEvery: Int { didSet { d.set(remindEvery, forKey: "remindEvery") } }
     @Published var focusMinutes: Int { didSet { d.set(focusMinutes, forKey: "focusMinutes") } }
@@ -70,6 +70,14 @@ final class Prefs: ObservableObject {
     @Published var keepLog: Bool { didSet { d.set(keepLog, forKey: "keepLog") } }
     /// How many times a day the pet brings up one of your wishes ("xin vía"); 0 turns it off.
     @Published var wishPerDay: Int { didSet { d.set(wishPerDay, forKey: "wishPerDay") } }
+    /// At most this many unsolicited reminders a day; meetings and timed tasks don't count.
+    @Published var nudgeBudget: Int { didSet { d.set(nudgeBudget, forKey: "nudgeBudget") } }
+    /// Minutes a task without a Todoist duration counts for in the day's load.
+    @Published var defaultEstimate: Int { didSet { d.set(defaultEstimate, forKey: "defaultEstimate") } }
+    /// Offer "where was I?" after a break, a meeting or a detour.
+    @Published var resumeCard: Bool { didSet { d.set(resumeCard, forKey: "resumeCard") } }
+    /// The "where was I?" card may show the page title and address (never from a private window).
+    @Published var resumeDetails: Bool { didSet { d.set(resumeDetails, forKey: "resumeDetails") } }
 
     /// First time the app ever ran; used so day one doesn't start with a grumpy pet.
     let firstLaunch: Date
@@ -90,6 +98,7 @@ final class Prefs: ObservableObject {
             "claudeModel": ClaudeClient.defaultModel,
             "antics": true, "voiceOn": false,
             "protectFlow": true, "stillWhileTyping": true, "bubbleGap": 15, "keepLog": true, "wishPerDay": 2,
+            "nudgeBudget": 8, "defaultEstimate": 30, "resumeCard": true, "resumeDetails": true,
         ])
         lang = Lang(rawValue: d.string(forKey: "lang") ?? "") ?? .systemDefault
         petName = d.string(forKey: "petName") ?? "Mochi"
@@ -122,6 +131,10 @@ final class Prefs: ObservableObject {
         bubbleGap = d.integer(forKey: "bubbleGap")
         keepLog = d.bool(forKey: "keepLog")
         wishPerDay = d.integer(forKey: "wishPerDay")
+        nudgeBudget = d.integer(forKey: "nudgeBudget")
+        defaultEstimate = d.integer(forKey: "defaultEstimate")
+        resumeCard = d.bool(forKey: "resumeCard")
+        resumeDetails = d.bool(forKey: "resumeDetails")
         if let f = d.object(forKey: "firstLaunch") as? Date {
             firstLaunch = f
         } else {
