@@ -275,6 +275,48 @@ enum Lines {
     static func voiceCheer() -> String { pick([("Tuyệt vời!", "Awesome!"), ("Hoan hô!", "Hooray!")]) }
     static func voiceSummary(minutes: Int) -> String { L("Hôm nay bạn lướt mạng \(minutes) phút đó.", "You goofed off for \(minutes) minutes today.") }
 
+    // MARK: Xin vía
+
+    static func wishOfDay(_ w: Wish) -> String {
+        L("\(w.emoji) Vía hôm nay: “\(TextClean.short(w.title, 40))” — một bước nhỏ nào?",
+          "\(w.emoji) Today's wish: “\(TextClean.short(w.title, 40))” — one small step?")
+    }
+
+    static func wishReminder(_ w: Wish) -> String {
+        var s = L("✨ Nhắc vía: \(w.emoji) “\(w.title)”", "✨ Remember your wish: \(w.emoji) “\(w.title)”")
+        if !w.why.isEmpty { s += "\n" + L("Vì: ", "Because: ") + w.why }
+        if !w.plan.isEmpty {
+            s += "\n" + L("Kế hoạch của bạn: ", "Your plan: ") + w.plan
+        } else if !w.obstacle.isEmpty {
+            s += "\n" + L("Nếu “\(TextClean.short(w.obstacle, 40))” xuất hiện, bạn sẽ làm gì?", "If “\(TextClean.short(w.obstacle, 40))” shows up, what will you do?")
+        }
+        if w.steps > 0 { s += "\n" + L("Đã đi được \(w.steps) bước rồi đó 💪", "\(w.steps) step(s) done so far 💪") }
+        return s + "\n" + L("Hôm nay làm một bước nhỏ cho nó nhé?", "One small step for it today?")
+    }
+
+    static func blessing(_ w: Wish) -> String {
+        let t = "“\(TextClean.short(w.title, 40))”"
+        return pick([
+            ("🙏 Đã truyền vía ✨ \(t) sẽ thành! Giờ làm một bước nhỏ để vía có chỗ bám nhé.",
+             "🙏 Good vibes sent ✨ \(t) will happen! Now give them a small step to hold on to."),
+            ("🍀 Vía may mắn đã gửi! Nhắm mắt 5 giây: thấy mình đạt \(t) chưa? Giờ nghĩ trở ngại lớn nhất… và bước đầu tiên.",
+             "🍀 Lucky vibes sent! Close your eyes for 5 seconds: see yourself achieving \(t)? Now the biggest obstacle… and the first step."),
+            ("✨ Xin vía thành công! Mà vía mạnh nhất là vía của người bắt tay vào làm 😉",
+             "✨ Blessing granted! But the strongest luck belongs to whoever starts 😉"),
+        ])
+    }
+
+    static func wishStepAdded(_ w: Wish) -> String {
+        L("Đã thêm bước nhỏ cho “\(TextClean.short(w.title, 40))” vào hôm nay ✨", "Added a small step towards “\(TextClean.short(w.title, 40))” for today ✨")
+    }
+
+    static func wishStepDone(_ w: Wish) -> String {
+        L("✨ Vía về rồi! \(w.steps) bước cho \(w.emoji) “\(TextClean.short(w.title, 40))”",
+          "✨ The vibes worked! \(w.steps) step(s) towards \(w.emoji) “\(TextClean.short(w.title, 40))”")
+    }
+
+    static func voiceBlessing() -> String { L("Đã truyền vía. Cố lên nhé!", "Good vibes sent. You've got this!") }
+
     /// Short, evidence-based productivity tips the pet drops occasionally.
     static func tip() -> String {
         pick([

@@ -91,6 +91,8 @@ enum Accessory: String, CaseIterable, Codable, Identifiable {
 
 enum CelebrationKind: String, CaseIterable {
     case jump, spin, flip, dance, fireworks
+    /// "Xin vía": a calm float holding up a glowing star (not a reward for a task).
+    case blessing
 }
 
 /// What the pet does right after you finish a task.

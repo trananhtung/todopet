@@ -9,6 +9,9 @@ final class BoardState: ObservableObject {
     @Published var wardrobe = false
     /// Shows the pet's diary.
     @Published var showLog = false
+    /// Shows "xin vía" (your wishes); `wishFocus` opens the small-step field of one wish.
+    @Published var showWishes = false
+    @Published var wishFocus: UUID?
 }
 
 enum PriorityStyle {
@@ -61,6 +64,8 @@ struct BoardView: View {
             Divider()
             if state.showLog {
                 LogView(log: brain.log, state: state)
+            } else if state.showWishes {
+                WishesView(store: brain.wishes, brain: brain, state: state)
             } else if brain.hasToken, state.wardrobe {
                 WardrobeView(life: life, state: state, mood: brain.mood)
             } else if brain.hasToken, let task = state.breakdown {
@@ -511,6 +516,7 @@ final class BoardController: NSObject, NSPopoverDelegate {
             state.breakdown = nil
             state.wardrobe = false
             state.showLog = false
+            state.showWishes = false
             onShownChanged?(false)
         }
     }

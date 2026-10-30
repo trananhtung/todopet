@@ -10,11 +10,11 @@ struct LifeBar: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
                 HStack(spacing: 4) {
-                    Text("🍙")
+                    Text("🍙").fixedSize()
                     ProgressView(value: s.satiety, total: 100)
                         .tint(s.satiety < 30 ? .red : (s.satiety < 60 ? .orange : .green))
-                        .frame(width: 54)
-                    Text("\(Int(s.satiety))%").font(.caption2.monospacedDigit()).foregroundColor(.secondary)
+                        .frame(width: 44)
+                    Text("\(Int(s.satiety))%").font(.caption2.monospacedDigit()).foregroundColor(.secondary).fixedSize()
                 }
                 .help(L("Độ no: mỗi việc xong +25%, đói dần trong giờ làm", "Fullness: +25% per finished task, drops during work hours"))
                 if s.dirt > 0 {
@@ -26,6 +26,13 @@ struct LifeBar: View {
                         .help(L("Chuỗi ngày đạt mục tiêu", "Days in a row hitting your target"))
                 }
                 Spacer()
+                Button {
+                    state.showWishes = true
+                } label: {
+                    Text(L("✨ Xin vía", "✨ Wishes")).font(.caption)
+                }
+                .buttonStyle(.borderless)
+                .help(L("Những điều bạn muốn đạt được", "The things you want to achieve"))
                 Button {
                     state.wardrobe = true
                 } label: {

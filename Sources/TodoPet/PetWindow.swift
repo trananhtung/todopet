@@ -53,7 +53,7 @@ struct PetView: View {
                         pose.celebration = c.kind
                         pose.golden = c.golden
                         let since = tl.date.timeIntervalSince(c.start)
-                        if since < 1.6 {
+                        if since < 1.6, !c.food.isEmpty {
                             pose.food = c.food
                             pose.foodT = since
                         }

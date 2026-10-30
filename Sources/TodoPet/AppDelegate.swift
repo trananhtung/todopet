@@ -49,6 +49,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         board = BoardController(brain: brain, prefs: prefs)
 
         brain.openBoard = { [weak self] focusAdd in self?.openBoard(focusAdd: focusAdd) }
+        brain.openWishes = { [weak self] id in
+            self?.board.state.wishFocus = id
+            self?.board.state.showWishes = true
+            self?.openBoard(focusAdd: false)
+        }
         brain.openBreakdown = { [weak self] task in
             self?.board.state.breakdown = task
             self?.openBoard(focusAdd: false)
@@ -246,6 +251,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(ActionItem(L("Im lặng 1 giờ", "Quiet for 1 hour")) { [weak self] in self?.brain.quiet(minutes: 60) })
         }
         menu.addItem(ActionItem(L("Làm mới", "Refresh"), key: "r") { [weak self] in self?.brain.refreshSoon() })
+        menu.addItem(ActionItem(L("✨ Xin vía…", "✨ Wishes…")) { [weak self] in
+            self?.board.state.showWishes = true
+            self?.openBoard(focusAdd: false)
+        })
         menu.addItem(ActionItem(L("Nhật ký pet…", "Pet diary…")) { [weak self] in
             self?.board.state.showLog = true
             self?.openBoard(focusAdd: false)

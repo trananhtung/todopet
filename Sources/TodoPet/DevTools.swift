@@ -246,6 +246,26 @@ enum DevTools {
         let exported = PetLog.export(reread.today, day: DayMath.key(t0))
         check(exported.hasPrefix("TodoPet") && exported.contains("💬 “Viết báo cáo”"), "diary export for copying")
 
+        // Xin vía.
+        var wa = Wish(title: "A")
+        var wb = Wish(title: "B")
+        var wc = Wish(title: "C")
+        wa.lastShown = t0.addingTimeInterval(-3600)
+        wb.lastShown = t0.addingTimeInterval(-7200)
+        wc.lastShown = nil
+        check(WishRules.next([wa, wb, wc])?.title == "C" && WishRules.next([wa, wb])?.title == "B", "never-shown wish first, then the oldest")
+        check(WishRules.spacingMinutes(workStart: 8, workEnd: 18, perDay: 2) == 200
+              && WishRules.spacingMinutes(workStart: 8, workEnd: 10, perDay: 2) == 60, "wish reminders spread over the day")
+        let wishStore = WishStore(persist: false, initial: [wa])
+        wishStore.linkStep("task-1", to: wa.id)
+        check(wishStore.completeStep(taskId: "task-1")?.steps == 1 && wishStore.completeStep(taskId: "task-1") == nil,
+              "a finished step counts once")
+        check(WishRules.stepContent("  Học 10 từ ") == "✨ Học 10 từ", "small step marked with ✨")
+        let oldWish = try? JSONDecoder().decode(Wish.self, from: Data(#"{"title":"X"}"#.utf8))
+        check(oldWish?.title == "X" && oldWish?.emoji == "🌟" && oldWish?.steps == 0, "saved wishes with missing fields still load")
+        var anyLife = LifeState()
+        check(LifeRules.feed(&anyLife, now: t0, roll: 0.5, pick: 0.99).kind != .blessing, "finishing a task never plays the blessing")
+
         // Language switch.
         let saved = currentLang
         currentLang = .en
@@ -323,6 +343,21 @@ enum DevTools {
                 BubbleAction(title: L("Tha cho tôi 15'", "Spare me 15'")) {},
             ])
             saveView(BubbleView(model: model), .aqua, url.appendingPathComponent("bubble-block.png"))
+
+            let wishState = BoardState()
+            wishState.showWishes = true
+            saveView(BoardView(brain: brain, prefs: prefs, state: wishState).background(Color(nsColor: .windowBackgroundColor)), .aqua,
+                     url.appendingPathComponent("wishes.png"))
+            if let w = brain.wishes.wishes.first {
+                let model = BubbleModel()
+                model.mood = .happy
+                model.bubble = Bubble(text: Lines.wishReminder(w), actions: [
+                    BubbleAction(title: L("🙏 Xin vía", "🙏 Bless it"), primary: true) {},
+                    BubbleAction(title: L("＋ Bước nhỏ", "＋ Small step")) {},
+                    BubbleAction(title: L("Để sau", "Later")) {},
+                ])
+                saveView(BubbleView(model: model), .aqua, url.appendingPathComponent("bubble-wish.png"))
+            }
 
             // A sample diary for the docs.
             let base = DayMath.at(hour: 9, on: Date())
@@ -464,6 +499,7 @@ struct LifeSheet: View {
                 pet(celebrating(.dance, t: 0.1), "dance")
                 pet(celebrating(.fireworks, t: 0.3), "fireworks")
                 pet(celebrating(.fireworks, t: 0.35, golden: true), L("vàng hiếm", "rare golden"))
+                pet(celebrating(.blessing, t: 0.6), L("xin vía", "blessing"))
             }
         }
         .padding(10)

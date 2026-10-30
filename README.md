@@ -25,6 +25,19 @@ English · <a href="README.vi.md">Tiếng Việt</a>
 - **Spots tasks you keep postponing.** When a task has sat on your list for 3+ days, the pet asks whether to split it into 15–30 minute steps (added as Todoist sub-tasks, with step 1 on today's plan) or drop it from the plan. With a Claude API key, **Ask Claude** suggests the steps for you.
 - **Speaks English and Vietnamese**, switchable in Settings.
 
+### Xin vía: wishes the pet keeps reminding you of
+
+"Xin vía" is Vietnamese for asking someone to pass on their good luck. Write down what you want to achieve (✨ on the board): speak fluent English, run 10 km, save for a house… The pet then:
+- **brings one wish up 2 times a day** (configurable, 0–4), spread over the workday and subject to the same focus-friendly rules as every other reminder; the morning greeting also mentions the wish of the day
+- **🙏 Xin vía**: the pet floats up holding a glowing star and sends good vibes
+- **＋ Small step**: type one concrete step, and it becomes a task for today in Todoist (marked ✨ and linked back to the wish). When you finish it, the pet says the vibes worked and counts the step towards the wish
+
+Each wish can also have the outcome you picture, your biggest inner obstacle and an if-then plan. That's WOOP (Gabriele Oettingen): positive fantasies alone tend to sap motivation, while picturing the outcome, naming the obstacle and planning for it makes people more likely to follow through. So every reminder ends with a small step, not just a nice thought. Wishes are stored on your Mac only.
+
+| Wishes | Reminder |
+|---|---|
+| ![Wishes](docs/wishes.png) | ![Wish reminder](docs/bubble-wish.png) |
+
 ### A pet that lives with your work
 
 ![Growth, hunger, accessories and celebrations](docs/life.png)
@@ -220,6 +233,7 @@ build/TodoPet.app/Contents/MacOS/TodoPet --snapshot out/  # render moods, board 
 | `LifeViews.swift` | Life bar and wardrobe & achievements view |
 | `Calm.swift` | When it's OK to interrupt: typing pauses, deep-work detection, bubble spacing |
 | `PetLog.swift` / `LogView.swift` | The pet diary: entries, daily files, summary, viewer |
+| `Wishes.swift` / `WishesView.swift` | Xin vía: wishes, reminders, blessing, small steps |
 | `PetArt.swift` | The pet, drawn in code for every mood |
 | `PetWindow.swift` | Floating window, walking, drag and drop |
 | `Bubble.swift` / `BoardView.swift` / `SettingsView.swift` | UI |

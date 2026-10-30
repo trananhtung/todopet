@@ -102,6 +102,9 @@ struct SettingsView: View {
                 Toggle(L("Làm việc Chủ nhật", "Work on Sunday"), isOn: $prefs.workSunday)
                 Stepper(L("Nhắc việc mỗi \(prefs.remindEvery) phút", "Nudge every \(prefs.remindEvery) min"),
                         value: $prefs.remindEvery, in: 15...180, step: 15)
+                Stepper(prefs.wishPerDay == 0 ? L("Nhắc vía: tắt", "Wish reminders: off")
+                                              : L("Nhắc vía \(prefs.wishPerDay) lần mỗi ngày", "Wish reminders: \(prefs.wishPerDay)× a day"),
+                        value: $prefs.wishPerDay, in: 0...4)
                 Stepper(L("Phiên tập trung: \(prefs.focusMinutes) phút", "Focus session: \(prefs.focusMinutes) min"),
                         value: $prefs.focusMinutes, in: 5...90, step: 5)
                 Stepper(L("Nghỉ giữa phiên: \(prefs.breakMinutes) phút", "Break: \(prefs.breakMinutes) min"),

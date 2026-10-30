@@ -26,13 +26,20 @@ protocol TodoService: AnyObject {
     func completedTasks(since: Date, until: Date) async throws -> [TodoTask]
     func stats() async throws -> ProductivityStats
     @discardableResult
-    func addTask(content: String, dueString: String?, priority: Int, parentId: String?) async throws -> TodoTask?
+    func addTask(content: String, dueString: String?, priority: Int, parentId: String?, description: String?) async throws -> TodoTask?
     func quickAdd(text: String) async throws
     func close(id: String) async throws
     func reopen(id: String) async throws
     func reschedule(id: String, dueString: String) async throws
     /// Permanent: Todoist deletes the task and its sub-tasks, and the API can't restore them.
     func delete(id: String) async throws
+}
+
+extension TodoService {
+    @discardableResult
+    func addTask(content: String, dueString: String?, priority: Int, parentId: String?) async throws -> TodoTask? {
+        try await addTask(content: content, dueString: dueString, priority: priority, parentId: parentId, description: nil)
+    }
 }
 
 // MARK: - Real client (Todoist API v1, https://developer.todoist.com/api/v1/)
@@ -123,13 +130,14 @@ final class TodoistClient: TodoService {
         try decoder.decode(ProductivityStats.self, from: try await send("GET", "tasks/completed/stats"))
     }
 
-    func addTask(content: String, dueString: String?, priority: Int, parentId: String?) async throws -> TodoTask? {
+    func addTask(content: String, dueString: String?, priority: Int, parentId: String?, description: String?) async throws -> TodoTask? {
         var body: [String: Any] = ["content": content, "priority": priority]
         if let dueString {
             body["due_string"] = dueString
             body["due_lang"] = "en"
         }
         if let parentId { body["parent_id"] = parentId }
+        if let description { body["description"] = description }
         return try? decoder.decode(TodoTask.self, from: try await send("POST", "tasks", body: body))
     }
 
@@ -187,7 +195,7 @@ final class DemoService: TodoService {
                           karma: 1234)
     }
 
-    func addTask(content: String, dueString: String?, priority: Int, parentId: String?) async throws -> TodoTask? {
+    func addTask(content: String, dueString: String?, priority: Int, parentId: String?, description: String?) async throws -> TodoTask? {
         await pause()
         counter += 1
         let now = Date()
@@ -196,7 +204,7 @@ final class DemoService: TodoService {
         case "tomorrow": DayMath.key(now.addingTimeInterval(86_400))
         default: nil
         }
-        let t = TodoTask(id: "\(counter)", content: content, priority: priority,
+        let t = TodoTask(id: "\(counter)", content: content, description: description, priority: priority,
                          due: day.map { TodoDue(date: $0, string: dueString) }, parentId: parentId)
         if day == DayMath.key(now) { active.append(t) }
         return t

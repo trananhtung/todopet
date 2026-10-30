@@ -25,6 +25,19 @@ Một chú pet nhỏ cho macOS, đi dạo trên thanh Dock, đọc công việc 
 - **Phát hiện việc bị dời mãi.** Việc nào nằm trong danh sách từ 3 ngày trở lên, pet hỏi bạn muốn chia nhỏ hay bỏ khỏi kế hoạch. Chia nhỏ là tách thành các bước 15–30 phút, thêm vào Todoist dưới dạng việc con, bước 1 vào kế hoạch hôm nay. Nếu có API key Claude, nút **Nhờ Claude gợi ý** sẽ đề xuất các bước giúp bạn.
 - **Nói tiếng Việt và tiếng Anh**, đổi trong Cài đặt.
 
+### Xin vía: điều bạn mong muốn, được nhắc đi nhắc lại
+
+Ghi lại những điều bạn muốn đạt được (nút ✨ trên bảng việc): nói tiếng Anh trôi chảy, chạy 10 km, tiết kiệm mua nhà… Sau đó pet sẽ:
+- **nhắc một điều ước 2 lần mỗi ngày** (chỉnh được 0–4 lần), rải đều trong giờ làm và tuân theo cùng luật "không làm mất tập trung" như mọi lời nhắc khác; lời chào buổi sáng cũng nhắc "vía hôm nay"
+- **🙏 Xin vía**: pet bay lên, nâng ngôi sao phát sáng và truyền vía cho bạn
+- **＋ Bước nhỏ**: gõ một bước cụ thể, bước đó thành việc hôm nay trong Todoist (đánh dấu ✨ và ghi rõ thuộc điều ước nào). Xong việc đó, pet báo "vía về rồi" và cộng bước vào điều ước
+
+Mỗi điều ước còn có thể ghi kết quả bạn hình dung, trở ngại lớn nhất trong bạn và kế hoạch "nếu… thì…". Đó là phương pháp WOOP (Gabriele Oettingen): chỉ mơ tưởng tích cực thường làm giảm động lực, còn hình dung kết quả, gọi tên trở ngại và lập kế hoạch cho nó giúp người ta làm được nhiều hơn. Vì vậy lời nhắc nào cũng kết thúc bằng một bước nhỏ, không chỉ là một suy nghĩ đẹp. Điều ước chỉ lưu trên máy bạn.
+
+| Xin vía | Lời nhắc vía |
+|---|---|
+| ![Xin vía](docs/wishes-vi.png) | ![Nhắc vía](docs/bubble-wish-vi.png) |
+
 ### Một chú pet sống cùng công việc của bạn
 
 ![Lớn lên, đói, phụ kiện và ăn mừng](docs/life-vi.png)

@@ -76,10 +76,14 @@ final class Brain: ObservableObject {
     let life: PetLife
     /// Why the pet did (or didn't) say something, kept on this Mac for tuning.
     let log: PetLog
+    /// Things you want to achieve ("xin vía"), brought up now and then with a small step.
+    let wishes: WishStore
 
     /// Set by the app: open the task board (optionally focusing the "add task" field), the split view, and settings.
     var openBoard: ((_ focusAdd: Bool) -> Void)?
     var openBreakdown: ((TodoTask) -> Void)?
+    /// Opens the "xin vía" view, optionally ready to add a small step for one wish.
+    var openWishes: ((UUID?) -> Void)?
     var openSettings: (() -> Void)?
 
     private let calendar = CalendarWatcher()
@@ -114,6 +118,8 @@ final class Brain: ObservableObject {
         prefs.stillWhileTyping && (flow || CalmRules.secondsSinceKey() < 20 || CalendarMath.current(events, at: Date()) != nil)
     }
     private var lastStatsAt = Date.distantPast
+    /// Wish reminders shown today.
+    private var wishShows = 0
     private var timer: Timer?
     private var cancellables = Set<AnyCancellable>()
 
@@ -122,6 +128,7 @@ final class Brain: ObservableObject {
         life = demo ? PetLife(persist: false, initial: .demo) : PetLife()
         log = PetLog(folder: demo ? nil : PetLog.defaultFolder)
         log.enabled = prefs.keepLog
+        wishes = demo ? WishStore(persist: false, initial: WishStore.demo) : WishStore()
         if demo {
             useDemo()
             return
@@ -301,6 +308,8 @@ final class Brain: ObservableObject {
         // Celebrate (and feed the pet for) tasks you completed in the Todoist app since the last sync.
         let ids = Set(completed.map(\.id))
         let fresh = completed.filter { !knownCompleted.contains($0.id) && !completedViaPet.contains($0.id) }
+        // Steps for your wishes count even when finished in Todoist (the celebrated one counts in `celebrate`).
+        for t in didLoadOnce ? Array(fresh.dropFirst()) : fresh { wishes.completeStep(taskId: t.id) }
         if didLoadOnce, let first = fresh.first {
             recompute()
             celebrate(first, viaPet: false, feeds: fresh.count)
@@ -335,6 +344,7 @@ final class Brain: ObservableObject {
     private func resetDay() {
         dayKey = DayMath.key(Date())
         fired = [:]
+        wishShows = 0
         knownCompleted = []
         completedViaPet = []
         didLoadOnce = false
@@ -819,6 +829,10 @@ final class Brain: ObservableObject {
             }
             if life.state.dirt > 0 { text += "\n" + Lines.dirty(life.state.dirt) }
             if life.state.streak > 0 { text += "\n" + Lines.streak(life.state.streak) }
+            if prefs.wishPerDay > 0, let w = WishRules.next(wishes.wishes) {
+                text += "\n" + Lines.wishOfDay(w)
+                fired["wish"] = now   // the first wish reminder comes later in the day
+            }
             say(Bubble(text: text,
                        actions: needsPlan ? planActions() : (day.next.map { [focusAction($0), laterAction()] } ?? []),
                        seconds: 60),
@@ -875,6 +889,16 @@ final class Brain: ObservableObject {
                 speak(Lines.voiceGrumble())
                 return
             }
+        }
+
+        // 6d. Xin vía: bring up a wish now and then (spread over the day), with a blessing and a small step.
+        if ctx.inWork, prefs.wishPerDay > 0, wishShows < prefs.wishPerDay, let w = WishRules.next(wishes.wishes),
+           every("wish", minutes: WishRules.spacingMinutes(workStart: prefs.workStart, workEnd: prefs.workEnd, perDay: prefs.wishPerDay)) {
+            wishShows += 1
+            wishes.markShown(w.id)
+            say(Bubble(text: Lines.wishReminder(w), actions: wishActions(w), seconds: 45),
+                why: L("nhắc vía lần \(wishShows)/\(prefs.wishPerDay) hôm nay", "wish reminder \(wishShows)/\(prefs.wishPerDay) today"))
+            return
         }
 
         // 7. Overdue tasks.
@@ -983,6 +1007,8 @@ final class Brain: ObservableObject {
         if r.golden { fed += L(", bánh vàng hiếm", ", rare golden treat") }
         if let levelUp { fed += L(", lớn lên thành \(levelUp.name)", ", grew up: \(levelUp.name)") }
         if !unlocked.isEmpty { fed += L(", mở khoá ", ", unlocked ") + unlocked.map(\.emoji).joined() }
+        let wishDone = task.flatMap { wishes.completeStep(taskId: $0.id, at: now) }
+        if let w = wishDone { fed += L(", +1 bước cho “\(w.title)” (\(w.steps))", ", +1 step towards “\(w.title)” (\(w.steps))") }
         log.add(.life, fed)
         celebrateUntil = now.addingTimeInterval(r.golden || levelUp != nil ? 5 : 4)
         recompute()
@@ -998,8 +1024,9 @@ final class Brain: ObservableObject {
             if r.cleaned { lines.append(Lines.cleaned(life.state.dirt)) }
             if let levelUp { lines.append(Lines.levelUp(levelUp)) }
             if !unlocked.isEmpty { lines.append(Lines.unlocked(unlocked)) }
-            bubble = Bubble(text: lines.joined(separator: "\n"), actions: actions, seconds: unlocked.isEmpty && levelUp == nil ? 8 : 14,
-                            urgent: true)
+            if let w = wishDone { lines.append(Lines.wishStepDone(w)) }
+            bubble = Bubble(text: lines.joined(separator: "\n"), actions: actions,
+                            seconds: unlocked.isEmpty && levelUp == nil && wishDone == nil ? 8 : 14, urgent: true)
             lastBubbleAt = now
             if levelUp != nil || r.golden { speak(Lines.voiceCheer()) }
         }
@@ -1184,6 +1211,51 @@ final class Brain: ObservableObject {
         let start = first.flatMap { f in day.open.first { $0.id == f.id } }
         say(Bubble(text: Lines.splitDone(count: clean.count, first: firstTitle),
                    actions: start.map { [focusAction($0)] } ?? [], seconds: 30, urgent: true))
+        return true
+    }
+
+    // MARK: - Xin vía (wishes)
+
+    private func wishActions(_ w: Wish) -> [BubbleAction] {
+        [BubbleAction(title: L("🙏 Xin vía", "🙏 Bless it"), primary: true) { [weak self] in self?.bless(w) },
+         BubbleAction(title: L("＋ Bước nhỏ", "＋ Small step")) { [weak self] in self?.openWishes?(w.id) },
+         laterAction()]
+    }
+
+    /// The little ritual: the pet raises a glowing star, sends good vibes, and points at the next small step.
+    func bless(_ w: Wish) {
+        let now = Date()
+        celebration = CelebrationEvent(kind: .blessing, food: "", golden: false, combo: 0, start: now)
+        celebrateUntil = now.addingTimeInterval(3.5)
+        recompute()
+        play(.celebrate)
+        bubble = Bubble(text: Lines.blessing(w), actions: [
+            BubbleAction(title: L("＋ Bước nhỏ hôm nay", "＋ A small step today"), primary: true) { [weak self] in self?.openWishes?(w.id) },
+        ], seconds: 25, urgent: true)
+        lastBubbleAt = now
+        log.add(.life, L("Xin vía cho “\(w.title)”", "Blessed “\(w.title)”"))
+        speak(Lines.voiceBlessing())
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.7) { [weak self] in
+            MainActor.assumeIsolated { self?.recompute() }
+        }
+    }
+
+    /// Adds a small step for a wish to today's plan in Todoist, linked back to the wish.
+    func addWishStep(_ w: Wish, step: String) async -> Bool {
+        let text = step.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let service, !text.isEmpty else { return false }
+        do {
+            let task = try await service.addTask(content: WishRules.stepContent(text), dueString: "today", priority: 1,
+                                                 parentId: nil, description: WishRules.stepDescription(w))
+            if let id = task?.id { wishes.linkStep(id, to: w.id) }
+        } catch {
+            errorText = error.localizedDescription
+            return false
+        }
+        lastPlanAction = Date()
+        log.add(.life, L("Thêm bước nhỏ cho “\(w.title)”: \(text)", "Added a small step towards “\(w.title)”: \(text)"))
+        await refresh()
+        say(Bubble(text: Lines.wishStepAdded(w), seconds: 8, urgent: true))
         return true
     }
 

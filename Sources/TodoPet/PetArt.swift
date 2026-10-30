@@ -118,10 +118,13 @@ enum PetArt {
             case .spin:
                 jump = h * 14
                 spinX = CGFloat(cos(t * 9))
+            case .blessing:
+                // A calm float, as if lifted by the wish.
+                jump = 8 + CGFloat(sin(t * 2)) * 3
             default:
                 jump = h * 20
             }
-            if p.celebration != .dance { squash = (ph < 0.1 || ph > 0.9) ? 0.12 : -0.06 * h }
+            if p.celebration != .dance && p.celebration != .blessing { squash = (ph < 0.1 || ph > 0.9) ? 0.12 : -0.06 * h }
         case .happy:
             if p.walking {
                 jump = abs(CGFloat(sin(p.walkPhase))) * 5
@@ -309,6 +312,7 @@ enum PetArt {
             }
             switch mood {
             case .happy: arcEye(x, up: true)
+            case .celebrating where p.celebration == .blessing: arcEye(x, up: true)
             case .celebrating:
                 ctx.fill(Path(ellipseIn: CGRect(x: x - 5.5, y: ey - 7, width: 11, height: 13)), with: .color(ink))
                 ctx.fill(Path(ellipseIn: CGRect(x: x - 4, y: ey - 5.5, width: 4.5, height: 4.5)), with: .color(.white))
@@ -350,7 +354,7 @@ enum PetArt {
                 w.addQuadCurve(to: CGPoint(x: fx + 6, y: my), control: CGPoint(x: fx + 3, y: my + 4))
                 ctx.stroke(w, with: .color(pal.line.color), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
             case .happy, .normal, .celebrating:
-                let big: CGFloat = mood == .celebrating ? 1.35 : 1
+                let big: CGFloat = mood == .celebrating ? (p.celebration == .blessing ? 0.8 : 1.35) : 1
                 var m = Path()
                 m.move(to: CGPoint(x: fx - 7 * big, y: my - 1))
                 m.addQuadCurve(to: CGPoint(x: fx + 7 * big, y: my - 1), control: CGPoint(x: fx, y: my + 12 * big))
@@ -402,6 +406,11 @@ enum PetArt {
             }
         } else {
             switch mood {
+            case .celebrating where p.celebration == .blessing:
+                // Both hands lifted close together, holding up the star.
+                for side in [-1.0, 1.0] as [CGFloat] {
+                    arm(CGPoint(x: cx + side * bw * 0.3, y: top + bh * 0.04), side * 2.85)
+                }
             case .celebrating where p.celebration == .dance:
                 // Disco: one arm up, then the other.
                 let up = sin(t * 8) > 0
@@ -518,6 +527,24 @@ enum PetArt {
             for (i, pt) in [CGPoint(x: cx - 42, y: top + 4), CGPoint(x: cx + 43, y: top - 4), CGPoint(x: cx + 30, y: top - 18)].enumerated() {
                 let sc = 0.45 + 0.55 * abs(CGFloat(sin(t * 3 + Double(i) * 2.1)))
                 ctx.fill(sparkle(at: pt, r: 6 * sc), with: .color(RGBA(0xFFC93C).color.opacity(0.9)))
+            }
+        case .celebrating where p.celebration == .blessing:
+            // A glowing star held above the head, with sparkles drifting up.
+            let star = CGPoint(x: cx, y: top - 16)
+            let pulse = 1 + 0.12 * CGFloat(sin(t * 4))
+            for (r, a) in [(22.0, 0.10), (15.0, 0.18), (10.0, 0.28)] as [(CGFloat, Double)] {
+                let rr = r * pulse
+                ctx.fill(Path(ellipseIn: CGRect(x: star.x - rr, y: star.y - rr, width: rr * 2, height: rr * 2)),
+                         with: .color(RGBA(0xFFE27A).color.opacity(a)))
+            }
+            ctx.fill(sparkle(at: star, r: 9 * pulse), with: .color(RGBA(0xFFC93C).color))
+            ctx.fill(sparkle(at: star, r: 4 * pulse), with: .color(.white.opacity(0.9)))
+            for i in 0..<7 {
+                let ph = (t * 0.5 + Double(i) / 7).truncatingRemainder(dividingBy: 1)
+                let x = cx + CGFloat(sin(Double(i) * 2.3 + t)) * bw * 0.6
+                let y = by - CGFloat(ph) * 95
+                ctx.fill(sparkle(at: CGPoint(x: x, y: y), r: 2.5 + CGFloat(i % 3)),
+                         with: .color(RGBA(i % 2 == 0 ? 0xFFC93C : 0xFFF3B0).color.opacity(sin(ph * .pi))))
             }
         case .celebrating:
             let colors: [UInt32] = [0xFF5C8A, 0xFFC93C, 0x4FC3F7, 0x66BB6A, 0xAB47BC]
