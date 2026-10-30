@@ -78,6 +78,8 @@ final class Prefs: ObservableObject {
     @Published var resumeCard: Bool { didSet { d.set(resumeCard, forKey: "resumeCard") } }
     /// The "where was I?" card may show the page title and address (never from a private window).
     @Published var resumeDetails: Bool { didSet { d.set(resumeDetails, forKey: "resumeDetails") } }
+    /// Show the home corner (knitted decorations) at the bottom-right of the screen.
+    @Published var showHome: Bool { didSet { d.set(showHome, forKey: "showHome") } }
 
     /// First time the app ever ran; used so day one doesn't start with a grumpy pet.
     let firstLaunch: Date
@@ -98,7 +100,7 @@ final class Prefs: ObservableObject {
             "claudeModel": ClaudeClient.defaultModel,
             "antics": true, "voiceOn": false,
             "protectFlow": true, "stillWhileTyping": true, "bubbleGap": 15, "keepLog": true, "wishPerDay": 2,
-            "nudgeBudget": 8, "defaultEstimate": 30, "resumeCard": true, "resumeDetails": true,
+            "nudgeBudget": 8, "defaultEstimate": 30, "resumeCard": true, "resumeDetails": true, "showHome": true,
         ])
         lang = Lang(rawValue: d.string(forKey: "lang") ?? "") ?? .systemDefault
         petName = d.string(forKey: "petName") ?? "Mochi"
@@ -135,6 +137,7 @@ final class Prefs: ObservableObject {
         defaultEstimate = d.integer(forKey: "defaultEstimate")
         resumeCard = d.bool(forKey: "resumeCard")
         resumeDetails = d.bool(forKey: "resumeDetails")
+        showHome = d.bool(forKey: "showHome")
         if let f = d.object(forKey: "firstLaunch") as? Date {
             firstLaunch = f
         } else {

@@ -28,19 +28,35 @@ enum Stage: Int, CaseIterable {
     var nextXP: Int? { rawValue + 1 < Stage.thresholds.count ? Stage.thresholds[rawValue + 1] : nil }
 }
 
-/// Things the pet can wear, unlocked by milestones.
+/// Things the pet can wear: milestone ones, ones from chests, and seasonal ones.
 enum Accessory: String, CaseIterable, Codable, Identifiable {
     case bow, scarf, sunglasses, tophat, crown, gradcap
+    case beanie, flowercrown, partyhat, nonla, bandana, heartglasses, roundglasses, starglasses
+    case maicrown, tetscarf, bunnyband, witchhat, santahat, bellcollar
 
     enum Slot { case head, face, neck }
 
     var id: String { rawValue }
 
+    /// Regular chest finds (rare tier).
+    static let chestPool: [Accessory] = [.beanie, .flowercrown, .partyhat, .nonla, .bandana, .heartglasses, .roundglasses, .starglasses]
+
     var slot: Slot {
         switch self {
-        case .bow, .tophat, .crown, .gradcap: .head
-        case .sunglasses: .face
-        case .scarf: .neck
+        case .bow, .tophat, .crown, .gradcap, .beanie, .flowercrown, .partyhat, .nonla, .maicrown, .bunnyband, .witchhat, .santahat: .head
+        case .sunglasses, .heartglasses, .roundglasses, .starglasses: .face
+        case .scarf, .bandana, .tetscarf, .bellcollar: .neck
+        }
+    }
+
+    /// Seasonal outfits only drop (from legendary chests) during their season.
+    var season: Season? {
+        switch self {
+        case .maicrown, .tetscarf: .tet
+        case .bunnyband: .trungthu
+        case .witchhat: .halloween
+        case .santahat, .bellcollar: .christmas
+        default: nil
         }
     }
 
@@ -52,6 +68,20 @@ enum Accessory: String, CaseIterable, Codable, Identifiable {
         case .tophat: "🎩"
         case .crown: "👑"
         case .gradcap: "🎓"
+        case .beanie: "🧶"
+        case .flowercrown: "🌸"
+        case .partyhat: "🥳"
+        case .nonla: "👒"
+        case .bandana: "🤠"
+        case .heartglasses: "😍"
+        case .roundglasses: "🤓"
+        case .starglasses: "🤩"
+        case .maicrown: "🌼"
+        case .tetscarf: "🧧"
+        case .bunnyband: "🐰"
+        case .witchhat: "🧙"
+        case .santahat: "🎅"
+        case .bellcollar: "🔔"
         }
     }
 
@@ -63,20 +93,37 @@ enum Accessory: String, CaseIterable, Codable, Identifiable {
         case .tophat: L("Mũ quý ông", "Top hat")
         case .crown: L("Vương miện", "Crown")
         case .gradcap: L("Mũ tốt nghiệp", "Grad cap")
+        case .beanie: L("Mũ len", "Beanie")
+        case .flowercrown: L("Vòng hoa", "Flower crown")
+        case .partyhat: L("Mũ tiệc", "Party hat")
+        case .nonla: L("Nón lá", "Nón lá (conical hat)")
+        case .bandana: L("Khăn bandana", "Bandana")
+        case .heartglasses: L("Kính trái tim", "Heart glasses")
+        case .roundglasses: L("Kính tròn", "Round glasses")
+        case .starglasses: L("Kính ngôi sao", "Star glasses")
+        case .maicrown: L("Vòng hoa mai", "Apricot blossom crown")
+        case .tetscarf: L("Khăn đỏ ngày Tết", "Red Tết scarf")
+        case .bunnyband: L("Băng đô thỏ ngọc", "Moon rabbit ears")
+        case .witchhat: L("Mũ phù thuỷ", "Witch hat")
+        case .santahat: L("Mũ ông già Noel", "Santa hat")
+        case .bellcollar: L("Vòng cổ chuông", "Bell collar")
         }
     }
 
     var requirement: String {
-        switch self {
+        if let season { return L("Rương huyền thoại dịp \(season.name) \(season.emoji)", "Legendary chest around \(season.name) \(season.emoji)") }
+        return switch self {
         case .bow: L("Xong việc đầu tiên", "Finish your first task")
-        case .scarf: L("Chuỗi 3 ngày đạt mục tiêu", "A 3-day streak")
+        case .scarf: L("Chuỗi 3 ngày làm việc", "A 3-day streak")
         case .sunglasses: L("Combo ×3", "A ×3 combo")
         case .tophat: L("Xong 25 việc", "Finish 25 tasks")
-        case .crown: L("Chuỗi 7 ngày đạt mục tiêu", "A 7-day streak")
+        case .crown: L("Chuỗi 7 ngày làm việc", "A 7-day streak")
         case .gradcap: L("Lớn tới giai đoạn Trưởng thành", "Grow up to Grown-up")
+        default: L("Rương quà hiếm 🎁", "Rare chest find 🎁")
         }
     }
 
+    /// Milestone accessories unlock on their own; the others only come from chests.
     func isEarned(_ s: LifeState) -> Bool {
         switch self {
         case .bow: s.totalDone >= 1
@@ -85,6 +132,7 @@ enum Accessory: String, CaseIterable, Codable, Identifiable {
         case .tophat: s.totalDone >= 25
         case .crown: s.bestStreak >= 7
         case .gradcap: Stage.of(xp: s.xp).rawValue >= Stage.adult.rawValue
+        default: false
         }
     }
 }
@@ -139,6 +187,8 @@ struct DayClose {
     var lost = 0
     var snackEarned = false
     var sticker = false
+    /// The sticker filled a page: +50 XP and a snack.
+    var pageDone = false
     var repairOffered = false
     var repairExpired = false
     var unlocked: [Accessory] = []
@@ -183,6 +233,28 @@ struct LifeState: Codable, Equatable {
     /// Reminders closed or ignored in a row; three hold the rest for an hour.
     var dismissedInRow = 0
     var nudgeHoldUntil: Date?
+    // The game: chests for work time, knitting during focus, trips, the sticker book and weekly chapters.
+    var chests = 0
+    var chestsToday = 0
+    /// Seconds of real work towards the next chest.
+    var workSec: Double = 0
+    /// Knitting progress, 0…1.
+    var craft: Double = 0
+    var decor: [String] = []
+    var craftXpToday = 0
+    var craftXpDay = ""
+    /// Decorations shown in the home corner (up to 3).
+    var home: [String] = []
+    var souvenirs: [String] = []
+    var trip: TripState?
+    var tripDay: String?
+    var tripDeclined: String?
+    var stickerPage = 1
+    var pageFilled = StickerRules.pageGifts
+    var week = WeekStats()
+    var lastWeek: WeekStats?
+    /// The week whose chapter was opened in a morning greeting.
+    var chapterShown = ""
 
     init() {}
 
@@ -218,6 +290,26 @@ struct LifeState: Codable, Equatable {
         dayBackoff = try c.decodeIfPresent([String: Int].self, forKey: .dayBackoff) ?? d.dayBackoff
         dismissedInRow = try c.decodeIfPresent(Int.self, forKey: .dismissedInRow) ?? d.dismissedInRow
         nudgeHoldUntil = try c.decodeIfPresent(Date.self, forKey: .nudgeHoldUntil)
+        chests = min(ChestRules.maxHeld, max(0, try c.decodeIfPresent(Int.self, forKey: .chests) ?? d.chests))
+        chestsToday = try c.decodeIfPresent(Int.self, forKey: .chestsToday) ?? d.chestsToday
+        workSec = try c.decodeIfPresent(Double.self, forKey: .workSec) ?? d.workSec
+        craft = min(1, max(0, try c.decodeIfPresent(Double.self, forKey: .craft) ?? d.craft))
+        decor = try c.decodeIfPresent([String].self, forKey: .decor) ?? d.decor
+        craftXpToday = try c.decodeIfPresent(Int.self, forKey: .craftXpToday) ?? d.craftXpToday
+        craftXpDay = try c.decodeIfPresent(String.self, forKey: .craftXpDay) ?? d.craftXpDay
+        home = try c.decodeIfPresent([String].self, forKey: .home) ?? d.home
+        souvenirs = try c.decodeIfPresent([String].self, forKey: .souvenirs) ?? d.souvenirs
+        trip = try c.decodeIfPresent(TripState.self, forKey: .trip)
+        if let t = trip, t.back < t.start || t.back > t.start.addingTimeInterval(TripRules.maxMinutes * 60) { trip = nil }
+        tripDay = try c.decodeIfPresent(String.self, forKey: .tripDay)
+        tripDeclined = try c.decodeIfPresent(String.self, forKey: .tripDeclined)
+        // Older versions had only the list of perfect days: the book picks up where it would be.
+        stickerPage = try c.decodeIfPresent(Int.self, forKey: .stickerPage) ?? 1 + perfectDays.count / (StickerRules.pageSize - StickerRules.pageGifts)
+        pageFilled = try c.decodeIfPresent(Int.self, forKey: .pageFilled)
+            ?? StickerRules.pageGifts + perfectDays.count % (StickerRules.pageSize - StickerRules.pageGifts)
+        week = try c.decodeIfPresent(WeekStats.self, forKey: .week) ?? d.week
+        lastWeek = try c.decodeIfPresent(WeekStats.self, forKey: .lastWeek)
+        chapterShown = try c.decodeIfPresent(String.self, forKey: .chapterShown) ?? d.chapterShown
     }
 
     /// A pet with some history, for `--demo` and screenshots.
@@ -235,6 +327,17 @@ struct LifeState: Codable, Equatable {
         s.wearing = ["scarf"]
         s.perfectDays = ["2026-10-20", "2026-10-21", "2026-10-23"]
         s.distraction = ["youtube.com": 720, "facebook.com": 300]
+        s.chests = 1
+        s.workSec = 1100
+        s.craft = 0.4
+        s.decor = ["plant", "mug", "lamp", "fishbowl"]
+        s.home = ["plant", "lamp", "fishbowl"]
+        s.souvenirs = ["hoian", "dalat"]
+        s.unlocked += ["beanie", "witchhat"]
+        s.wearing = ["scarf", "witchhat"]
+        s.pageFilled = 5
+        s.week = WeekStats(key: WeekRules.key(Date()), done: 7, stickers: 1, trips: 1)
+        s.lastWeek = WeekStats(key: "", done: 12, stickers: 3, trips: 2)
         return s
     }
 
@@ -257,6 +360,7 @@ enum LifeRules {
         s.lastDoneAt = now
         s.bestCombo = max(s.bestCombo, s.combo)
         s.totalDone += 1
+        s.week.done += 1
         let golden = roll < 0.1
         if golden { s.goldens += 1 }
         s.xp += 10 + 5 * min(max(s.combo - 1, 0), 4) + (golden ? 20 : 0)
@@ -275,6 +379,7 @@ enum LifeRules {
     /// Reverses one feed (when you undo a completion).
     static func unfeed(_ s: inout LifeState) {
         s.totalDone = max(0, s.totalDone - 1)
+        s.week.done = max(0, s.week.done - 1)
         s.xp = max(0, s.xp - 10)
         s.satiety = max(0, s.satiety - 25)
         s.combo = max(0, s.combo - 1)
@@ -379,6 +484,7 @@ enum LifeRules {
                     r.sticker = true
                     s.perfectDays.append(s.dayKey)
                     s.xp += 30
+                    r.pageDone = StickerRules.add(&s)
                 }
             }
         } else if missed && s.dayBusy {
@@ -415,6 +521,9 @@ enum LifeRules {
         s.dayBackoff = [:]
         s.dismissedInRow = 0
         s.nudgeHoldUntil = nil
+        s.chestsToday = 0
+        s.workSec = 0
+        if let d = DateParse.parse(today) { WeekRules.roll(&s, today: d) }
         s.perfectDays = Array(s.perfectDays.suffix(60))
         r.unlocked = checkUnlocks(&s)
         return r
@@ -474,6 +583,19 @@ final class PetLife: ObservableObject {
             } else {
                 s.wearing.removeAll { Accessory(rawValue: $0)?.slot == a.slot }
                 s.wearing.append(a.rawValue)
+            }
+        }
+    }
+
+    /// Puts a knitted decoration in the home corner (up to 3) or takes it out.
+    func toggleHome(_ d: Decor) {
+        guard state.decor.contains(d.rawValue) else { return }
+        mutate { s in
+            if s.home.contains(d.rawValue) {
+                s.home.removeAll { $0 == d.rawValue }
+            } else {
+                s.home.append(d.rawValue)
+                if s.home.count > 3 { s.home.removeFirst() }
             }
         }
     }

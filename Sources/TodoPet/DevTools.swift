@@ -379,6 +379,88 @@ enum DevTools {
         var anyLife = LifeState()
         check(LifeRules.feed(&anyLife, now: t0, roll: 0.5, pick: 0.99).kind != .blessing, "finishing a task never plays the blessing")
 
+        // Seasons.
+        let onDay = { (k: String) in DateParse.parse(k + "T12:00:00")! }
+        check(SeasonRules.active(on: onDay("2026-10-30")) == ActiveSeason(season: .halloween, start: "2026-10-20", end: "2026-11-01", daysLeft: 2),
+              "Halloween: Oct 20 – Nov 1")
+        check(SeasonRules.active(on: onDay("2026-02-20"))?.season == .tet && SeasonRules.active(on: onDay("2026-02-10"))?.season == .tet
+              && SeasonRules.active(on: onDay("2026-02-25")) == nil, "Tết: a week either side of the lunar new year (Feb 17, 2026)")
+        check(SeasonRules.active(on: onDay("2026-09-27"))?.season == .trungthu && SeasonRules.active(on: onDay("2027-01-01"))?.season == .christmas
+              && SeasonRules.active(on: onDay("2026-07-01")) == nil, "Mid-Autumn, Christmas across New Year, nothing in July")
+
+        // Chests.
+        var game = LifeState()
+        check(!ChestRules.addWork(&game, seconds: 1790) && ChestRules.addWork(&game, seconds: 15) && game.chests == 1 && game.workSec == 5,
+              "a chest for every 30 minutes of work")
+        game.chestsToday = ChestRules.maxPerDay
+        check(!ChestRules.addWork(&game, seconds: 4000), "at most 3 chests a day")
+        game.chests = 1
+        let common = ChestRules.open(&game, roll: 0.1, pick: 0.9, season: nil)
+        check(common?.reward == .xp(20) && game.chests == 0 && game.xp == 20, "common chest: +20 XP")
+        check(ChestRules.open(&game, roll: 0.1, pick: 0.9, season: nil) == nil, "no chest, nothing to open")
+        game.chests = 1
+        let rare = ChestRules.open(&game, roll: 0.8, pick: 0, season: nil)
+        check(rare?.reward == .accessory(.beanie) && game.unlocked.contains("beanie") && game.wearing.contains("beanie"),
+              "rare chest: a new outfit, put on if the slot is free")
+        game.chests = 1
+        let legendary = ChestRules.open(&game, roll: 0.97, pick: 0, season: .halloween)
+        check(legendary?.reward == .accessory(.witchhat) && Accessory.witchhat.season == .halloween, "legendary chest in season: its outfit")
+        game.chests = 1
+        let golden = ChestRules.open(&game, roll: 0.97, pick: 0, season: nil)
+        check(golden?.reward == .golden && game.goldens == 1, "legendary chest out of season: a golden treat")
+        let xpBefore = game.xp
+        ChestRules.undo(&game, golden!)
+        check(game.chests == 1 && game.xp == xpBefore - 50 && game.goldens == 0, "Todoist failed: the chest goes back")
+        check(!Accessory.beanie.isEarned(LifeState()) && Accessory.chestPool.allSatisfy { $0.season == nil },
+              "chest outfits never unlock on their own")
+
+        // Knitting.
+        var knit = LifeState()
+        check(CraftRules.knit(&knit, seconds: 600, sessionMinutes: 25, pick: 0, today: "2026-10-20") == nil && abs(knit.craft - 0.4) < 1e-9,
+              "knitting: 10 of 25 minutes is 40%")
+        check(CraftRules.dropStitches(&knit) && abs(knit.craft - 0.3) < 1e-9, "a distraction drops a few stitches")
+        let made = CraftRules.knit(&knit, seconds: 1050, sessionMinutes: 25, pick: 0, today: "2026-10-20")
+        check(made?.decor == .rug && knit.decor == ["rug"] && knit.craft == 0, "a whole session makes a decoration")
+        knit.craft = 0
+        _ = CraftRules.knit(&knit, seconds: 120, sessionMinutes: 2, pick: 0, today: "2026-10-20")
+        check(abs(knit.craft - 120.0 / 1500) < 1e-9, "a 2-minute starter knits only its share")
+        var allDecor = LifeState()
+        allDecor.decor = Decor.allCases.map(\.rawValue)
+        var xps: [Int] = []
+        for _ in 0..<4 { xps.append(CraftRules.knit(&allDecor, seconds: 1500, sessionMinutes: 25, pick: 0, today: "2026-10-20")?.xp ?? -1) }
+        check(xps == [30, 30, 30, 0], "with every decoration owned: +30 XP, at most 90 a day")
+
+        // Trips.
+        check(TripRules.shouldOffer(planDone: true, inWork: true, minutesToEnd: 90, today: "d", tripDay: nil, declined: nil, away: false)
+              && !TripRules.shouldOffer(planDone: true, inWork: true, minutesToEnd: 45, today: "d", tripDay: nil, declined: nil, away: false)
+              && !TripRules.shouldOffer(planDone: true, inWork: true, minutesToEnd: 90, today: "d", tripDay: nil, declined: "d", away: false),
+              "trip offer: plan done, an hour left, not declined today")
+        var trip = LifeState()
+        let leave = DayMath.at(hour: 15, on: t0)
+        let started = TripRules.start(&trip, now: leave, workEnd: DayMath.at(hour: 16, on: t0), pick: 0)
+        check(started.back == DayMath.at(hour: 16, on: t0) && started.place == "hoian", "back by the end of work at the latest")
+        let early = TripRules.finish(&trip, now: leave.addingTimeInterval(600))
+        check(early?.early == true && trip.trip == nil && trip.tripDay == nil && trip.souvenirs.isEmpty, "called back early: no souvenir, trip not used up")
+        _ = TripRules.start(&trip, now: leave, workEnd: DayMath.at(hour: 18, on: t0), pick: 0)
+        let home = TripRules.finish(&trip, now: leave.addingTimeInterval(3600))
+        check(home?.isNew == true && trip.souvenirs == ["hoian"] && trip.week.trips == 1, "back with a souvenir")
+        trip.souvenirs = TripRules.souvenirs.map(\.id)
+        _ = TripRules.start(&trip, now: leave, workEnd: DayMath.at(hour: 18, on: t0), pick: 0)
+        check(TripRules.finish(&trip, now: leave.addingTimeInterval(3600))?.xp == 20, "a souvenir already on the shelf: +20 XP")
+
+        // Sticker book and weekly chapters.
+        var book = LifeState()
+        book.pageFilled = 9
+        check(StickerRules.add(&book) && book.stickerPage == 2 && book.pageFilled == 2 && book.xp == 50 && book.snacks == 2,
+              "a full sticker page: +50 XP, a snack, and a new page with 2 gifts")
+        check(WeekRules.key(onDay("2026-11-01")) == "2026-10-26" && WeekRules.key(onDay("2026-10-26")) == "2026-10-26", "weeks start on Monday")
+        var weeks = LifeState()
+        weeks.week = WeekStats(key: "2026-10-19", done: 9, stickers: 2, trips: 1)
+        WeekRules.roll(&weeks, today: onDay("2026-10-27"))
+        check(weeks.lastWeek?.done == 9 && weeks.week == WeekStats(key: "2026-10-26"), "a new week keeps last week's recap")
+        let oldBook = try? JSONDecoder().decode(LifeState.self, from: Data(#"{"perfectDays":["a","b","c","d","e","f","g","h","i","j"]}"#.utf8))
+        check(oldBook?.stickerPage == 2 && oldBook?.pageFilled == 4, "older saves pick up the sticker book where it would be")
+
         // Language switch.
         let saved = currentLang
         currentLang = .en
@@ -405,6 +487,7 @@ enum DevTools {
         if let l = ProcessInfo.processInfo.environment["TODOPET_LANG"].flatMap(Lang.init(rawValue:)) { prefs.lang = l }
         savePNG(MoodSheet(), url.appendingPathComponent("moods.png"), scale: 2)
         savePNG(LifeSheet(), url.appendingPathComponent("life.png"), scale: 2)
+        savePNG(OutfitSheet(), url.appendingPathComponent("outfits.png"), scale: 2)
         savePNG(IconArt(), url.appendingPathComponent("icon-1024.png"), scale: 1)
 
         let brain = Brain(prefs: prefs, demo: true)
@@ -608,6 +691,51 @@ struct MoodSheet: View {
     private func pet(_ pose: PetPose) -> some View {
         Canvas { ctx, size in PetArt.draw(&ctx, size: size, pose: pose) }
             .frame(width: 120, height: 120)
+    }
+}
+
+/// Every outfit, the knitting pet during focus, and the signpost left behind on a trip.
+struct OutfitSheet: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(0..<3) { row in
+                HStack(spacing: 2) {
+                    ForEach(Array(Accessory.allCases.dropFirst(row * 8).prefix(8))) { a in
+                        VStack(spacing: 0) {
+                            Canvas { ctx, size in
+                                var pose = PetPose(mood: .happy, t: 0.3)
+                                pose.wearing = [a]
+                                PetArt.draw(&ctx, size: size, pose: pose)
+                            }
+                            .frame(width: 110, height: 110)
+                            Text(a.rawValue).font(.system(size: 10, weight: .semibold, design: .rounded))
+                        }
+                    }
+                    if row == 2 {
+                        VStack(spacing: 0) {
+                            Canvas { ctx, size in
+                                var pose = PetPose(mood: .focus, t: 0.3)
+                                pose.craft = 0.6
+                                PetArt.draw(&ctx, size: size, pose: pose)
+                            }
+                            .frame(width: 110, height: 110)
+                            Text("knitting").font(.system(size: 10, weight: .semibold, design: .rounded))
+                        }
+                        VStack(spacing: 0) {
+                            Canvas { ctx, size in
+                                PetArt.drawTripSign(&ctx, size: size, emoji: "🏮", place: "Hội An", back: "16:30", t: 0)
+                            }
+                            .frame(width: 110, height: 110)
+                            Text("on a trip").font(.system(size: 10, weight: .semibold, design: .rounded))
+                        }
+                    }
+                }
+            }
+            HomeView(items: [.plant, .lamp, .fishbowl]).padding(.leading, 20)
+        }
+        .padding(10)
+        .background(Color.white)
+        .foregroundColor(.black)
     }
 }
 

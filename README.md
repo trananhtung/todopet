@@ -49,11 +49,24 @@ Each wish can also have the outcome you picture, your biggest inner obstacle and
 - **Feed it by finishing tasks.** Every finished task drops a treat into its mouth (+25% fullness). Fullness drains about 7% per work hour, so a lazy day leaves it thin, hungry and rumbling. Each workday you do nothing makes it dirtier, up to 3 levels with flies buzzing around, and each finished task washes one layer off. All of this carries over to the next day.
 - **Watch it grow.** Tasks earn XP, and the pet grows from Baby (with little leaves on its head) to Kid, Teen, Grown-up and Master.
 - **Surprise celebrations.** Each finished task gets a random dance: jump, spin, back-flip or disco. One in ten is a rare golden treat with a golden pet. Finishing tasks within 30 minutes of each other builds a combo (×2, ×3…) worth more XP, ending in fireworks.
-- **Unlock things to wear.** The pet earns a bow, scarf, sunglasses, top hat, crown and grad cap through milestones like your first task, a 3-day streak, a ×3 combo, 25 tasks and a 7-day streak. A sticker book collects every day you finish your whole plan.
+- **Unlock things to wear.** The pet earns a bow, scarf, sunglasses, top hat, crown and grad cap through milestones like your first task, a 3-day streak, a ×3 combo, 25 tasks and a 7-day streak. 14 more come from chests (below).
 - **Forgiving streaks.** One finished task on a workday keeps your streak. A goal day earns a 🍪 snack (you keep up to 2), and a missed workday eats a snack instead of your streak. A broken streak of 2+ days can be **mended**: finish 2 tasks on a workday within two weeks. Days off, days your Mac was off, and days packed with meetings never count against you.
 - **It feels alive.** Rest the cursor on it and it squints and slow-blinks like a content cat, with a little heart. Double-click it and it giggles; keep clicking and it gets dizzy. It shakes itself off after you drag it, waves when you come back, and yawns now and then when things are quiet. None of it happens while you type, focus or meet.
 - **Mischief, only while you're distracted.** Three minutes on a distracting site and it sighs and stomps. Grumpy for 10 minutes there, it marches across the screen dragging a sign with the task you're avoiding. Five minutes on YouTube while grumpy and it leaps into the middle of the screen with a (╯°□°)╯︵ ┻━┻. It never plays tricks after a bad day: that only makes things worse. At the end of the day it reports, sulking, how long you spent on distractions. It can also say its lines out loud (off by default).
 - **It plays fair.** No mischief during meetings or focus sessions or while you're away. At most one big stunt every 20 minutes. Every stunt has a **Spare me 15'** button, and clicking the pet calls it off. You can turn mischief off in Settings.
+
+### A little game around your work
+
+The game only rewards real work, shows its odds, and never sells anything.
+
+- **Chests.** Every 30 minutes of real work (at the Mac, in work hours, not on a distraction or in a meeting) earns a 🎁, up to 3 a day. Your next finished task opens it: common 70% (XP or a 🍪), rare 25% (a new outfit: beanie, flower crown, party hat, nón lá, bandana, heart, round or star glasses), legendary 5% (a seasonal outfit, or a golden treat).
+- **Seasonal outfits.** Apricot blossoms and a red scarf around **Tết**, moon-rabbit ears at **Trung Thu**, a witch hat at **Halloween**, a Santa hat and bell collar at **Christmas**. The wardrobe shows the season and the days left.
+- **Knitting while you focus.** During a focus session the pet knits beside you; a 25-minute session makes one decoration (a plant, a lamp, a fishbowl… 12 in all). A distracting site drops a few stitches, never the whole piece. Pick up to 3 for the **home corner**, a little shelf at the bottom-right of the screen (Settings can hide it).
+- **Trips.** When today's plan is done with an hour or more of work left, the pet asks to go on a trip (Hội An, Đà Lạt, Kyoto, Paris…). A signpost stands in for it for up to 2 hours, then it comes back with a souvenir for the shelf and a postcard in the diary. Starting a focus session or **Call back** brings it home early (no souvenir under 30 minutes).
+- **A sticker book with a head start.** Each page has 10 slots and starts with 2 gifts; every perfect day adds a 🌟, and a full page gives +50 XP and a 🍪.
+- **Weekly chapters.** The first greeting of the week opens a new chapter with last week's recap: tasks, stickers and trips.
+
+![Outfits, knitting and a trip](docs/outfits.png)
 
 | Wardrobe | Mischief |
 |---|---|

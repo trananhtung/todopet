@@ -147,6 +147,17 @@ final class Brain: ObservableObject {
     private var repairNote = false
     /// How yesterday was settled, told in the morning greeting.
     private var dayNote: String?
+    // The game.
+    private var lastTickAt = Date()
+    /// A chest was earned and not announced yet (it waits for a calm moment, or joins the end of focus).
+    private var pendingChest = false
+    /// Something the pet knitted during focus, told at the end of the session.
+    private var craftNote: String?
+    /// The distraction that already cost some stitches this session.
+    private var stitchesDropped: String?
+    private var tripOfferId: UUID?
+    /// The chest opened by the last finished task, given back if Todoist can't close it.
+    private var lastChest: (taskId: String, result: ChestResult)?
 
     /// The pet should keep still: you're typing, in the zone, or in a meeting.
     var calmMotion: Bool {
@@ -472,6 +483,7 @@ final class Brain: ObservableObject {
         if strip != st.segments { strip = st.segments }
         if abs(stripNow - st.now) > 0.002 { stripNow = st.now }
         settleLife(now)
+        if life.state.week.key.isEmpty { life.mutate { WeekRules.roll(&$0, today: now) } }
         if hasToken && didLoadOnce {
             // A packed calendar (under an hour free) excuses a day with nothing done.
             let busy = prefs.useCalendar && !events.isEmpty && CalendarMath.freeMinutes(events, from: dayStart, to: dayEnd) < 60
@@ -553,10 +565,12 @@ final class Brain: ObservableObject {
             if r.sticker { text += L(", nhận sticker 🌟", ", earned a 🌟 sticker") }
             if r.snackEarned { text += L(", thêm 1 🍪 (có \(after.snacks))", ", +1 🍪 (\(after.snacks) in the stash)") }
             if after.dirt > before.dirt { text += L(", bẩn thêm 1 lớp", ", one more layer of dirt") }
+            if r.pageDone { text += L(", đầy một trang sticker (+50 XP, +1 🍪)", ", filled a sticker page (+50 XP, +1 🍪)") }
             if r.repairOffered { text += L(", mở nhiệm vụ nối chuỗi tới \(after.repair?.until ?? "")", ", repair quest until \(after.repair?.until ?? "")") }
             if r.repairExpired { text += L(", hết hạn nối chuỗi", ", the repair quest ran out") }
             log.add(.life, text)
-            dayNote = Lines.dayClosed(r, streak: after.streak, snacks: after.snacks)
+            dayNote = [Lines.dayClosed(r, streak: after.streak, snacks: after.snacks), r.pageDone ? Lines.stickerPage(after.stickerPage - 1) : nil]
+                .compactMap { $0 }.joined(separator: "\n").nilIfEmpty
         }
         if !r.unlocked.isEmpty {
             say(Bubble(text: Lines.unlocked(r.unlocked), seconds: 12, urgent: true))
@@ -594,6 +608,8 @@ final class Brain: ObservableObject {
     /// without it the bubble is a reply to something you did. `kind` counts it against today's reminder budget.
     func say(_ b: Bubble, chime: Chime = .chatter, why: String? = nil, antic: Bool = false, kind: String? = nil) {
         if let cur = bubble, !cur.actions.isEmpty, !b.urgent, b.actions.isEmpty { return }
+        // On a trip only urgent bubbles and replies get through.
+        if life.state.trip != nil, why != nil, !b.urgent { return }
         var b = b
         b.reminder = why != nil
         b.kind = kind
@@ -629,6 +645,7 @@ final class Brain: ObservableObject {
     func noteResponse(_ r: BubbleResponse) {
         let b = bubble
         let kind = b?.kind
+        if case .closed = r, b?.id == tripOfferId { declineTrip() }
         switch r {
         case .picked(let title, let neutral):
             log.add(.response, L("Bạn bấm “\(title)”", "You tapped “\(title)”"), tag: "picked")
@@ -761,8 +778,92 @@ final class Brain: ObservableObject {
         trackMeeting(now)
         snapshotWork(now)
         updateFlow(now)
+        playGame(now, ctx: ctx)
         recompute()
         runRules(now)
+    }
+
+    /// Chests for real work time, knitting during focus, and the trip coming home.
+    private func playGame(_ now: Date, ctx: Context) {
+        let elapsed = min(60, max(0, now.timeIntervalSince(lastTickAt)))
+        lastTickAt = now
+        guard hasToken else { return }
+        if let t = life.state.trip, now >= t.back { comeHome(now) }
+        let atMac = Brain.idleSeconds() < 60
+        let inMeeting = CalendarMath.current(events, at: now) != nil
+        if ctx.inWork, atMac, !inMeeting, currentDistraction == nil, life.state.trip == nil,
+           life.mutate({ ChestRules.addWork(&$0, seconds: elapsed) }) {
+            pendingChest = true
+            log.add(.life, L("Được 1 rương 🎁 sau 30 phút làm việc (đang giữ \(life.state.chests))",
+                             "Earned a chest 🎁 for 30 minutes of work (\(life.state.chests) held)"))
+        }
+        guard let f = focus, !f.isBreak else {
+            stitchesDropped = nil
+            return
+        }
+        if let d = currentDistraction {
+            if d.minutes >= 0.5, stitchesDropped != d.app, life.mutate({ CraftRules.dropStitches(&$0) }) {
+                stitchesDropped = d.app
+                log.add(.life, L("Tuột vài mũi len vì \(d.app) giữa giờ tập trung", "Dropped a few stitches over \(d.app) during focus"))
+            }
+            return
+        }
+        guard atMac else { return }
+        // The last seconds up to 0:00 count too.
+        let seconds = min(elapsed, max(0, f.end.timeIntervalSince(now - elapsed)))
+        if let done = life.mutate({ CraftRules.knit(&$0, seconds: seconds, sessionMinutes: f.minutes, pick: .random(in: 0..<1), today: dayKey) }) {
+            craftNote = Lines.crafted(done)
+            log.add(.life, done.decor.map { L("Đan xong \($0.emoji) \($0.name)", "Knitted \($0.emoji) \($0.name)") }
+                ?? L("Đan xong một món nữa (+\(done.xp) XP)", "Knitted one more piece (+\(done.xp) XP)"))
+        }
+    }
+
+    // MARK: - Trips
+
+    /// The plan is done: the pet asks to go on a little trip (a check-in, never counted against the budget).
+    private func offerTrip(_ now: Date) {
+        let back = min(now.addingTimeInterval(TripRules.maxMinutes * 60), DayMath.at(hour: prefs.workEnd, on: now))
+        var b = Bubble(text: Lines.tripOffer(back: back), actions: [
+            BubbleAction(title: L("🧳 Đi đi!", "🧳 Go!"), primary: true) { [weak self] in self?.goOnTrip() },
+            BubbleAction(title: L("Ở nhà", "Stay"), neutral: true) { [weak self] in self?.declineTrip() },
+        ], seconds: 60)
+        b.urgent = false
+        tripOfferId = b.id
+        say(b, why: L("xong hết kế hoạch hôm nay, còn hơn 1 giờ làm việc", "today's plan is done with an hour or more of work left"))
+    }
+
+    func goOnTrip() {
+        let now = Date()
+        let trip = life.mutate { TripRules.start(&$0, now: now, workEnd: DayMath.at(hour: prefs.workEnd, on: now), pick: .random(in: 0..<1)) }
+        let place = TripRules.souvenir(trip.place)
+        log.add(.life, L("Pet đi \(place.placeName), về lúc \(DayMath.timeString(trip.back))", "The pet went to \(place.placeName), back at \(DayMath.timeString(trip.back))"))
+        bubble = Bubble(text: Lines.tripGone(place, back: trip.back), seconds: 6, urgent: true)
+        lastBubbleAt = now
+        recompute()
+    }
+
+    private func declineTrip() {
+        life.mutate { $0.tripDeclined = dayKey }
+    }
+
+    /// Calls the pet back early (before 30 minutes there's no souvenir, and the trip isn't used up).
+    func callBack() { comeHome(Date()) }
+
+    private func comeHome(_ now: Date) {
+        guard let r = life.mutate({ TripRules.finish(&$0, now: now) }) else { return }
+        if r.early {
+            log.add(.life, L("Bạn gọi pet về sớm, chưa kịp mua quà", "You called the pet back early, no souvenir yet"))
+            bubble = Bubble(text: Lines.tripEarly(r.souvenir), seconds: 6, urgent: true)
+        } else {
+            log.add(.life, L("Bưu thiếp từ \(r.souvenir.placeName): “\(r.souvenir.postcardText)”", "Postcard from \(r.souvenir.placeName): “\(r.souvenir.postcardText)”"),
+                    tag: "postcard")
+            celebration = CelebrationEvent(kind: .jump, food: r.souvenir.emoji, golden: false, combo: 0, start: now)
+            celebrateUntil = now.addingTimeInterval(4)
+            play(.celebrate)
+            bubble = Bubble(text: Lines.tripBack(r), seconds: 20, urgent: true)
+        }
+        lastBubbleAt = now
+        recompute()
     }
 
     /// Notices a meeting ending: if-then plans waiting for it, and the "anything to capture?" bookend.
@@ -974,6 +1075,16 @@ final class Brain: ObservableObject {
             }
         }
 
+        // On a trip: nothing below gets through.
+        if life.state.trip != nil { return }
+
+        // A chest was earned: a small reply-style note at a calm moment (never counted).
+        if pendingChest, !flow, CalmRules.atBreakpoint(secondsSinceKey: CalmRules.secondsSinceKey(), secondsSinceAppSwitch: now.timeIntervalSince(lastAppSwitch)) {
+            pendingChest = false
+            say(Bubble(text: Lines.chestFound(held: life.state.chests), seconds: 8))
+            return
+        }
+
         // Done for today: only meetings and timed tasks get through.
         if doneForToday { return }
 
@@ -1087,11 +1198,26 @@ final class Brain: ObservableObject {
                 text += "\n" + Lines.wishOfDay(w)
                 fired["wish"] = now   // the first wish reminder comes later in the day
             }
+            // The first greeting of a week opens a new chapter, with last week's recap.
+            if let last = life.state.lastWeek, life.state.chapterShown != life.state.week.key {
+                text += "\n" + Lines.weekRecap(last)
+                life.mutate { $0.chapterShown = $0.week.key }
+            }
             say(Bubble(text: text,
                        actions: needsPlan ? planActions() : (day.next.map { [focusAction($0), laterAction()] } ?? []),
                        seconds: 60),
                 why: L("lời chào đầu ngày làm việc", "first greeting of the workday")
                     + (needsPlan ? L(", mới có \(day.planned)/\(target) việc", ", only \(day.planned)/\(target) planned") : ""))
+            return
+        }
+
+        // 3a. The plan is done: a little trip, back with a souvenir.
+        let minutesToEnd = DayMath.at(hour: prefs.workEnd, on: now).timeIntervalSince(now) / 60
+        let planDone = day.completed.count >= target && day.remaining == 0
+        if TripRules.shouldOffer(planDone: planDone, inWork: ctx.inWork, minutesToEnd: minutesToEnd, today: dayKey,
+                                 tripDay: life.state.tripDay, declined: life.state.tripDeclined, away: life.state.trip != nil),
+           once("trip-\(dayKey)") {
+            offerTrip(now)
             return
         }
 
@@ -1281,6 +1407,13 @@ final class Brain: ObservableObject {
         if !unlocked.isEmpty { fed += L(", mở khoá ", ", unlocked ") + unlocked.map(\.emoji).joined() }
         let wishDone = task.flatMap { wishes.completeStep(taskId: $0.id, at: now) }
         if let w = wishDone { fed += L(", +1 bước cho “\(w.title)” (\(w.steps))", ", +1 step towards “\(w.title)” (\(w.steps))") }
+        // A finished task opens a held chest.
+        let season = SeasonRules.active(on: now)?.season
+        let chest = life.mutate { ChestRules.open(&$0, roll: .random(in: 0..<1), pick: .random(in: 0..<1), season: season) }
+        if let chest {
+            if let id = task?.id { lastChest = (id, chest) }
+            fed += L(", mở rương \(chest.tier.rawValue)", ", opened a \(chest.tier.rawValue) chest")
+        }
         log.add(.life, fed)
         celebrateUntil = now.addingTimeInterval(r.golden || levelUp != nil ? 5 : 4)
         recompute()
@@ -1297,6 +1430,7 @@ final class Brain: ObservableObject {
             if let levelUp { lines.append(Lines.levelUp(levelUp)) }
             if !unlocked.isEmpty { lines.append(Lines.unlocked(unlocked)) }
             if let w = wishDone { lines.append(Lines.wishStepDone(w)) }
+            if let chest { lines.append(Lines.chestOpened(chest)) }
             if repairNote {
                 lines.append(Lines.streakRepaired(life.state.streak))
                 repairNote = false
@@ -1330,6 +1464,10 @@ final class Brain: ObservableObject {
                 completed.removeAll { $0.id == task.id }
                 active.append(task)
                 life.mutate { LifeRules.unfeed(&$0) }
+                if let c = lastChest, c.taskId == task.id {
+                    life.mutate { ChestRules.undo(&$0, c.result) }
+                    lastChest = nil
+                }
                 recompute()
                 say(Bubble(text: Lines.error(error.localizedDescription), seconds: 10, urgent: true))
             }
@@ -1680,6 +1818,8 @@ final class Brain: ObservableObject {
     func startFocus(_ task: TodoTask?, minutes: Int? = nil, starter: Bool = false) {
         let m = minutes ?? prefs.focusMinutes
         let now = Date()
+        if life.state.trip != nil { comeHome(now) }
+        stitchesDropped = nil
         let t = task ?? day.next
         if let t { lastActedTask = t }
         focus = FocusSession(task: t, start: now, end: now.addingTimeInterval(Double(m) * 60), isBreak: false, minutes: m, starter: starter)
@@ -1736,7 +1876,12 @@ final class Brain: ObservableObject {
             actions.append(BubbleAction(title: L("☕ Nghỉ \(prefs.breakMinutes)'", "☕ Break \(prefs.breakMinutes)'")) { [weak self] in
                 self?.startBreak()
             })
-            bubble = Bubble(text: Lines.focusEnd(f.task, minutes: f.minutes), actions: actions, seconds: 120, urgent: true)
+            var text = Lines.focusEnd(f.task, minutes: f.minutes)
+            if let c = craftNote { text += "\n" + c }
+            if pendingChest { text += "\n" + Lines.chestFound(held: life.state.chests) }
+            craftNote = nil
+            pendingChest = false
+            bubble = Bubble(text: text, actions: actions, seconds: 120, urgent: true)
         }
         lastBubbleAt = Date()
     }

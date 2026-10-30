@@ -446,4 +446,68 @@ enum Lines {
         L("2 phút xong! Bắt đầu được là khó nhất rồi đó 💪 Làm tiếp một phiên không?",
           "2 minutes done! Starting was the hard part 💪 Keep going for a full session?")
     }
+
+    // MARK: - The game
+
+    static func chestFound(held: Int) -> String {
+        L("🎁 Mình nhặt được một rương quà sau 30 phút bạn làm việc! Xong việc tiếp theo là mở được nhé (đang có \(held)).",
+          "🎁 I found a chest after 30 minutes of your work! Finish your next task to open it (\(held) held).")
+    }
+
+    static func chestOpened(_ r: ChestResult) -> String {
+        let tier = switch r.tier {
+        case .common: L("Rương thường", "Common chest")
+        case .rare: L("Rương hiếm ✨", "Rare chest ✨")
+        case .legendary: L("Rương huyền thoại 🌟", "Legendary chest 🌟")
+        }
+        let what = switch r.reward {
+        case .xp(let n): "+\(n) XP"
+        case .snack: L("một 🍪 dự phòng", "a spare 🍪")
+        case .accessory(let a): "\(a.emoji) \(a.name)!"
+        case .golden: L("bánh vàng hiếm 🍰 (+50 XP)", "a rare golden treat 🍰 (+50 XP)")
+        }
+        return "🎁 \(tier): \(what)"
+    }
+
+    static func crafted(_ d: CraftDone) -> String {
+        if let decor = d.decor {
+            return L("🧶 Trong lúc bạn tập trung, mình đan xong \(decor.emoji) \(decor.name) cho góc nhà!",
+                     "🧶 While you focused, I knitted \(decor.emoji) \(decor.name) for our home corner!")
+        }
+        return d.xp > 0 ? L("🧶 Mình đan thêm một món nhỏ (+\(d.xp) XP)", "🧶 I knitted another little piece (+\(d.xp) XP)")
+                        : L("🧶 Mình đan thêm một món làm kỷ niệm", "🧶 I knitted another keepsake")
+    }
+
+    static func tripOffer(back: Date) -> String {
+        L("Xong hết kế hoạch rồi! 🎉 Cho mình đi chơi một chuyến nhé? Mình về lúc \(DayMath.timeString(back)), có quà cho bạn 🧳",
+          "The plan is done! 🎉 Can I go on a little trip? I'll be back at \(DayMath.timeString(back)) with a souvenir 🧳")
+    }
+
+    static func tripGone(_ p: Souvenir, back: Date) -> String {
+        L("Mình đi \(p.placeName) đây! Về lúc \(DayMath.timeString(back)) 👋", "Off to \(p.placeName)! Back at \(DayMath.timeString(back)) 👋")
+    }
+
+    static func tripEarly(_ p: Souvenir) -> String {
+        L("Mình về rồi! Chưa kịp tới \(p.placeName) nên chưa có quà, để lần sau nhé 😅",
+          "I'm back! Didn't make it to \(p.placeName) yet, so no souvenir this time 😅")
+    }
+
+    static func tripBack(_ r: TripReturn) -> String {
+        let gift = r.isNew ? L("Quà cho bạn: \(r.souvenir.emoji) \(r.souvenir.itemName)!", "A souvenir for you: \(r.souvenir.emoji) \(r.souvenir.itemName)!")
+                           : L("Quà này có rồi nên mình đổi lấy +\(r.xp) XP 😊", "We already have that one, so it's +\(r.xp) XP 😊")
+        return L("🧳 Mình về rồi! \(gift)\n💌 “\(r.souvenir.postcardText)”", "🧳 I'm back! \(gift)\n💌 “\(r.souvenir.postcardText)”")
+    }
+
+    static func weekRecap(_ w: WeekStats) -> String {
+        L("📖 Chương mới, trang mới! Tuần trước: \(w.done) việc, \(w.stickers) sticker, \(w.trips) chuyến đi.",
+          "📖 A new chapter, a fresh page! Last week: \(w.done) tasks, \(w.stickers) sticker(s), \(w.trips) trip(s).")
+    }
+
+    static func stickerPage(_ page: Int) -> String {
+        L("📒 Đầy trang sticker số \(page)! +50 XP và 1 🍪", "📒 Sticker page \(page) is full! +50 XP and a 🍪")
+    }
+}
+
+extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

@@ -49,11 +49,24 @@ Mỗi điều ước còn có thể ghi kết quả bạn hình dung, trở ng�
 - **Làm xong việc là cho pet ăn.** Mỗi việc xong là một món ngon rơi vào miệng pet (+25% độ no). Độ no giảm khoảng 7% mỗi giờ làm việc, nên lười cả ngày thì pet gầy, đói, bụng réo. Mỗi ngày làm việc mà không xong việc nào, pet bẩn thêm một lớp, tối đa 3 lớp, kèm ruồi bay quanh. Mỗi việc xong tắm sạch một lớp. Tất cả giữ nguyên sang ngày hôm sau.
 - **Nhìn pet lớn lên.** Việc xong cho XP, và pet lớn dần từ Em bé (có mầm lá trên đầu) lên Nhóc, Thiếu niên, Trưởng thành, Cao thủ.
 - **Ăn mừng bất ngờ.** Mỗi việc xong là một kiểu ngẫu nhiên: nhảy, xoay, lộn nhào, nhảy disco. 1/10 lần là bánh vàng hiếm, pet hoá vàng. Xong việc liên tiếp trong vòng 30 phút sẽ thành combo ×2, ×3…, nhiều XP hơn, và kết bằng pháo hoa.
-- **Mở khoá đồ để mặc.** Nơ, khăn, kính râm, mũ quý ông, vương miện, mũ tốt nghiệp, mở theo các cột mốc: việc đầu tiên, chuỗi 3 ngày, combo ×3, 25 việc, chuỗi 7 ngày… Có thêm sổ sticker ghi lại những ngày bạn làm trọn kế hoạch.
+- **Mở khoá đồ để mặc.** Nơ, khăn, kính râm, mũ quý ông, vương miện, mũ tốt nghiệp, mở theo các cột mốc: việc đầu tiên, chuỗi 3 ngày, combo ×3, 25 việc, chuỗi 7 ngày… Thêm 14 món nữa đến từ rương quà (xem bên dưới).
 - **Chuỗi ngày biết tha thứ.** Chỉ cần xong 1 việc trong ngày làm việc là giữ chuỗi. Ngày đạt mục tiêu được thêm một 🍪 bánh (giữ tối đa 2), lỡ một ngày làm việc thì pet ăn bánh thay vì làm đứt chuỗi. Chuỗi từ 2 ngày bị đứt vẫn **nối lại được**: xong 2 việc trong một ngày làm việc trong vòng 2 tuần. Ngày nghỉ, ngày tắt máy và ngày họp kín lịch không bao giờ bị tính là lười.
 - **Pet như đang sống.** Để con trỏ nằm yên trên pet, nó nheo mắt rồi chớp chậm như mèo được vuốt, kèm một trái tim nhỏ. Bấm đúp, pet cười khúc khích; bấm tiếp, pet chóng mặt. Kéo thả xong nó rũ mình, bạn quay lại thì nó vẫy tay, lúc yên ắng thỉnh thoảng nó ngáp. Không trò nào diễn ra khi bạn đang gõ phím, tập trung hay họp.
 - **Chỉ quậy khi bạn đang xao nhãng.** Ngồi trang gây xao nhãng 3 phút là pet thở dài, giậm chân. Cáu ở đó 10 phút thì pet diễu hành ngang màn hình, kéo theo tấm biển ghi tên việc bạn đang né. Đang cáu mà ngồi YouTube 5 phút thì pet nhảy lên giữa màn hình kèm (╯°□°)╯︵ ┻━┻. Pet không bao giờ quậy sau một ngày tệ, vì như thế chỉ làm bạn nản hơn. Cuối ngày, pet hờn dỗi báo bạn đã lướt mạng bao lâu. Pet có thể nói thành tiếng bằng giọng Linh của macOS (mặc định tắt).
 - **Quậy có luật.** Không quậy khi bạn đang họp, đang tập trung hay đã rời máy. Trò lớn tối đa 20 phút một lần. Mỗi trò có nút **Tha cho tôi 15'**, và bấm vào pet là pet thôi quậy. Bạn có thể tắt hẳn trò quậy trong Cài đặt.
+
+### Một trò chơi nhỏ quanh công việc
+
+Trò chơi chỉ thưởng cho việc làm thật, công khai tỉ lệ, và không bán gì cả.
+
+- **Rương quà.** Mỗi 30 phút làm việc thật (ngồi máy, trong giờ làm, không ở trang xao nhãng hay trong cuộc họp) được một 🎁, tối đa 3 rương mỗi ngày. Việc xong tiếp theo sẽ mở rương: thường 70% (XP hoặc 🍪), hiếm 25% (đồ mới: mũ len, vòng hoa, mũ tiệc, nón lá, khăn bandana, kính trái tim, kính tròn, kính ngôi sao), huyền thoại 5% (đồ theo mùa, hoặc bánh vàng).
+- **Đồ theo mùa.** Vòng hoa mai và khăn đỏ dịp **Tết**, băng đô thỏ ngọc dịp **Trung Thu**, mũ phù thuỷ dịp **Halloween**, mũ Noel và vòng cổ chuông dịp **Giáng sinh**. Tủ đồ cho biết đang mùa nào và còn bao nhiêu ngày.
+- **Đan len khi bạn tập trung.** Trong phiên tập trung, pet ngồi đan len cạnh bạn; một phiên 25 phút được một món trang trí (chậu cây, đèn dầu, bể cá… tổng 12 món). Mở trang xao nhãng thì tuột vài mũi, không bao giờ mất cả món. Chọn tối đa 3 món bày ở **góc nhà**, một kệ nhỏ ở góc dưới bên phải màn hình (tắt được trong Cài đặt).
+- **Đi phiêu lưu.** Xong hết kế hoạch mà còn từ 1 giờ làm việc trở lên, pet xin đi chơi (Hội An, Đà Lạt, Kyoto, Paris…). Một tấm biển đứng thay pet tối đa 2 giờ, rồi pet về mang theo quà lưu niệm cho kệ và một tấm bưu thiếp trong nhật ký. Bắt đầu phiên tập trung hoặc bấm **Gọi về** thì pet về sớm (dưới 30 phút thì chưa có quà).
+- **Sổ sticker có sẵn tiến độ.** Mỗi trang 10 ô, mở đầu bằng 2 ô quà; mỗi ngày làm trọn kế hoạch thêm một 🌟, đầy trang được +50 XP và một 🍪.
+- **Chương truyện hằng tuần.** Lời chào đầu tiên của tuần mở một chương mới, kèm tóm tắt tuần trước: số việc, sticker và chuyến đi.
+
+![Đồ để mặc, đan len và đi chơi](docs/outfits.png)
 
 | Tủ đồ | Trò quậy |
 |---|---|

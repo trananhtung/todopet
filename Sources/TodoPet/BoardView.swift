@@ -133,6 +133,20 @@ struct BoardView: View {
                 Label(L("Đang chạy chế độ demo — dữ liệu giả.", "Demo mode — sample data."), systemImage: "theatermasks")
                     .font(.caption).foregroundColor(.purple)
             }
+            if let trip = brain.life.state.trip {
+                let place = TripRules.souvenir(trip.place)
+                HStack(spacing: 8) {
+                    Text("🧳")
+                    Text(L("\(prefs.petName) đang đi \(place.placeName) \(place.emoji), về lúc \(DayMath.timeString(trip.back)).",
+                           "\(prefs.petName) is off to \(place.placeName) \(place.emoji), back at \(DayMath.timeString(trip.back))."))
+                        .font(.callout).fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 4)
+                    Button(L("Gọi về", "Call back")) { brain.callBack() }.font(.caption)
+                        .help(L("Về trước 30 phút thì chưa có quà", "Back within 30 minutes means no souvenir yet"))
+                }
+                .padding(8)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.teal.opacity(0.12)))
+            }
             if brain.doneForToday {
                 HStack(spacing: 8) {
                     Text("😴")

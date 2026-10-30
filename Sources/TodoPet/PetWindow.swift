@@ -52,8 +52,16 @@ struct PetView: View {
             let t = tl.date.timeIntervalSinceReferenceDate
             ZStack(alignment: .top) {
                 Canvas { ctx, size in
+                    // Away on a trip: a little signpost stands where the pet was.
+                    if let trip = life.state.trip {
+                        let place = TripRules.souvenir(trip.place)
+                        PetArt.drawTripSign(&ctx, size: size, emoji: place.emoji, place: place.placeName,
+                                            back: DayMath.timeString(trip.back), t: t)
+                        return
+                    }
                     var pose = motion.pose(mood: brain.mood, t: t)
                     pose.decorate(life.state)
+                    if let f = brain.focus, !f.isBreak { pose.craft = life.state.craft }
                     // Gestures never play while you type, focus or are in a meeting.
                     if !motion.calm, brain.focus == nil {
                         for g in [motion.gesture, brain.gesture].compactMap({ $0 }) {
@@ -75,7 +83,9 @@ struct PetView: View {
                     }
                     PetArt.draw(&ctx, size: size, pose: pose)
                 }
-                if let f = brain.focus {
+                if life.state.trip != nil {
+                    EmptyView()
+                } else if let f = brain.focus {
                     FocusChip(session: f, now: tl.date)
                 } else if brain.flow {
                     Text("🎧")
@@ -363,9 +373,9 @@ final class PetController {
                     motion.gesture = PetGesture(kind: .yawn, start: Date())
                 }
             }
-            if now >= until && !paused && !motion.hovered { chooseNext(now, mood) }
+            if now >= until && !paused && !motion.hovered && brain.life.state.trip == nil { chooseNext(now, mood) }
         case .walk(let tx):
-            if paused || motion.hovered || motion.calm || speed(mood) == 0 {
+            if paused || motion.hovered || motion.calm || speed(mood) == 0 || brain.life.state.trip != nil {
                 behavior = .idle(until: now + 0.6)
                 motion.walking = false
                 break

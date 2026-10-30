@@ -41,6 +41,8 @@ struct SettingsView: View {
                 if prefs.voiceOn {
                     Button(L("Nghe thử", "Test voice")) { Voice.shared.say(L("Ê! Làm việc đi chứ!", "Hey! Get to work!")) }
                 }
+                Toggle(L("Bày góc nhà của pet ở góc dưới bên phải màn hình", "Show the pet's home corner at the bottom-right of the screen"),
+                       isOn: $prefs.showHome)
                 Toggle(L("Mở cùng macOS", "Open at login"), isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, on in
                         do {

@@ -21,6 +21,8 @@ struct PetPose {
     var gestureP: Double = 0
     /// Seconds the cursor has been resting on the pet (petting).
     var hoverFor: Double = 0
+    /// Knitting progress (0…1) during a focus session: a yarn ball and a growing piece beside the pet.
+    var craft: Double?
 
     // Life: growth, hunger, dirt, accessories.
     var stageScale: Double = 1
@@ -556,22 +558,74 @@ enum PetArt {
         }
 
         // Accessories.
+        func neckBand(_ color: UInt32, accent: Color, dash: [CGFloat], tail: Bool) {
+            ctx.drawLayer { c in
+                c.clip(to: body)
+                var band = Path()
+                band.move(to: CGPoint(x: cx - bw * 0.55, y: by - bh * 0.40))
+                band.addQuadCurve(to: CGPoint(x: cx + bw * 0.55, y: by - bh * 0.40), control: CGPoint(x: cx, y: by - bh * 0.26))
+                c.stroke(band, with: .color(RGBA(color).color), lineWidth: 7)
+                c.stroke(band, with: .color(accent), style: StrokeStyle(lineWidth: 7, dash: dash))
+            }
+            guard tail else { return }
+            let tailPath = Path(roundedRect: CGRect(x: -3, y: 0, width: 6, height: 13), cornerRadius: 2)
+                .applying(CGAffineTransform(rotationAngle: 0.25 + CGFloat(sin(t * 4)) * 0.08))
+                .applying(CGAffineTransform(translationX: cx + bw * 0.22, y: by - bh * 0.33))
+            ctx.fill(tailPath, with: .color(RGBA(color).color))
+        }
+        func flowers(_ petal: UInt32, center: UInt32, alt: UInt32?) {
+            for i in 0..<5 {
+                let u = CGFloat(i - 2) / 2
+                let c = CGPoint(x: cx + u * bw * 0.34, y: top + 4 - (1 - u * u) * 4)
+                ctx.fill(Path(ellipseIn: CGRect(x: c.x - 4, y: c.y + 1, width: 7, height: 3.5)), with: .color(RGBA(0x6DBE6A).color))
+                for k in 0..<5 {
+                    let a = Double(k) / 5 * 2 * .pi + Double(i)
+                    let pt = CGPoint(x: c.x + CGFloat(cos(a)) * 2.6, y: c.y + CGFloat(sin(a)) * 2.6)
+                    ctx.fill(Path(ellipseIn: CGRect(x: pt.x - 2.3, y: pt.y - 2.3, width: 4.6, height: 4.6)),
+                             with: .color(RGBA(alt != nil && i % 2 == 1 ? alt! : petal).color))
+                }
+                ctx.fill(Path(ellipseIn: CGRect(x: c.x - 1.6, y: c.y - 1.6, width: 3.2, height: 3.2)), with: .color(RGBA(center).color))
+            }
+        }
+        func cone(base l: CGFloat, _ r: CGFloat, baseY: CGFloat, tip: CGPoint, bend: CGFloat = 0) -> Path {
+            var c = Path()
+            c.move(to: CGPoint(x: l, y: baseY))
+            c.addQuadCurve(to: tip, control: CGPoint(x: (l + tip.x) / 2 - bend, y: (baseY + tip.y) / 2))
+            c.addQuadCurve(to: CGPoint(x: r, y: baseY), control: CGPoint(x: (r + tip.x) / 2 + bend, y: (baseY + tip.y) / 2))
+            c.closeSubpath()
+            return c
+        }
+        let face = mood != .sleeping && !p.held
         for a in p.wearing {
             switch a {
             case .scarf:
+                neckBand(0xD84343, accent: .white.opacity(0.5), dash: [2, 5], tail: true)
+            case .bandana:
+                neckBand(0x3B6FD8, accent: .white.opacity(0.8), dash: [1.5, 4], tail: false)
+                var knot = Path()
+                knot.move(to: CGPoint(x: cx - 8, y: by - bh * 0.33))
+                knot.addLine(to: CGPoint(x: cx + 8, y: by - bh * 0.33))
+                knot.addLine(to: CGPoint(x: cx, y: by - bh * 0.15))
+                knot.closeSubpath()
+                ctx.fill(knot, with: .color(RGBA(0x3B6FD8).color))
+                ctx.stroke(knot, with: .color(RGBA(0x24479A).color), lineWidth: 1.2)
+            case .tetscarf:
+                neckBand(0xD32F2F, accent: RGBA(0xFFC107).color, dash: [3, 4], tail: true)
+            case .bellcollar:
                 ctx.drawLayer { c in
                     c.clip(to: body)
                     var band = Path()
-                    band.move(to: CGPoint(x: cx - bw * 0.55, y: by - bh * 0.40))
-                    band.addQuadCurve(to: CGPoint(x: cx + bw * 0.55, y: by - bh * 0.40), control: CGPoint(x: cx, y: by - bh * 0.26))
-                    c.stroke(band, with: .color(RGBA(0xD84343).color), lineWidth: 7)
-                    c.stroke(band, with: .color(.white.opacity(0.5)), style: StrokeStyle(lineWidth: 7, dash: [2, 5]))
+                    band.move(to: CGPoint(x: cx - bw * 0.55, y: by - bh * 0.38))
+                    band.addQuadCurve(to: CGPoint(x: cx + bw * 0.55, y: by - bh * 0.38), control: CGPoint(x: cx, y: by - bh * 0.25))
+                    c.stroke(band, with: .color(RGBA(0xC62828).color), lineWidth: 4)
                 }
-                let tail = Path(roundedRect: CGRect(x: -3, y: 0, width: 6, height: 13), cornerRadius: 2)
-                    .applying(CGAffineTransform(rotationAngle: 0.25 + CGFloat(sin(t * 4)) * 0.08))
-                    .applying(CGAffineTransform(translationX: cx + bw * 0.22, y: by - bh * 0.33))
-                ctx.fill(tail, with: .color(RGBA(0xD84343).color))
-            case .sunglasses where mood != .sleeping && !p.held:
+                let bell = CGRect(x: cx - 5, y: by - bh * 0.31, width: 10, height: 10)
+                ctx.fill(Path(ellipseIn: bell), with: .color(RGBA(0xFFC93C).color))
+                ctx.stroke(Path(ellipseIn: bell), with: .color(RGBA(0xA67C00).color), lineWidth: 1.2)
+                var slit = Path()
+                slit.move(to: CGPoint(x: bell.midX - 2.5, y: bell.midY + 1.5)); slit.addLine(to: CGPoint(x: bell.midX + 2.5, y: bell.midY + 1.5))
+                ctx.stroke(slit, with: .color(RGBA(0xA67C00).color), lineWidth: 1.2)
+            case .sunglasses where face:
                 for side in [-1.0, 1.0] as [CGFloat] {
                     let r = CGRect(x: fx + side * ex - 7, y: ey - 4.5, width: 14, height: 9)
                     ctx.fill(Path(roundedRect: r, cornerRadius: 3.5), with: .color(.black.opacity(0.88)))
@@ -584,13 +638,141 @@ enum PetArt {
                 bridge.move(to: CGPoint(x: fx - ex + 7, y: ey - 1.5))
                 bridge.addLine(to: CGPoint(x: fx + ex - 7, y: ey - 1.5))
                 ctx.stroke(bridge, with: .color(.black.opacity(0.88)), lineWidth: 1.6)
+            case .roundglasses where face:
+                for side in [-1.0, 1.0] as [CGFloat] {
+                    let r = CGRect(x: fx + side * ex - 7, y: ey - 7, width: 14, height: 14)
+                    ctx.fill(Path(ellipseIn: r), with: .color(.white.opacity(0.18)))
+                    ctx.stroke(Path(ellipseIn: r), with: .color(RGBA(0x3E2723).color), lineWidth: 1.7)
+                }
+                var bridge = Path()
+                bridge.move(to: CGPoint(x: fx - ex + 7, y: ey - 1))
+                bridge.addQuadCurve(to: CGPoint(x: fx + ex - 7, y: ey - 1), control: CGPoint(x: fx, y: ey - 4))
+                ctx.stroke(bridge, with: .color(RGBA(0x3E2723).color), lineWidth: 1.5)
+            case .heartglasses where face:
+                for side in [-1.0, 1.0] as [CGFloat] {
+                    let c = CGPoint(x: fx + side * ex, y: ey)
+                    var h = Path()
+                    h.move(to: CGPoint(x: c.x, y: c.y + 6))
+                    h.addCurve(to: CGPoint(x: c.x, y: c.y - 3), control1: CGPoint(x: c.x - 11, y: c.y - 1), control2: CGPoint(x: c.x - 5, y: c.y - 10))
+                    h.addCurve(to: CGPoint(x: c.x, y: c.y + 6), control1: CGPoint(x: c.x + 5, y: c.y - 10), control2: CGPoint(x: c.x + 11, y: c.y - 1))
+                    ctx.fill(h, with: .color(RGBA(0xFF5C8A, 0.88).color))
+                    ctx.stroke(h, with: .color(RGBA(0xC2185B).color), lineWidth: 1.2)
+                }
+                var bridge = Path()
+                bridge.move(to: CGPoint(x: fx - ex + 6, y: ey - 2)); bridge.addLine(to: CGPoint(x: fx + ex - 6, y: ey - 2))
+                ctx.stroke(bridge, with: .color(RGBA(0xC2185B).color), lineWidth: 1.4)
+            case .starglasses where face:
+                for side in [-1.0, 1.0] as [CGFloat] {
+                    let star = PetArt.star(at: CGPoint(x: fx + side * ex, y: ey), r: 8.5)
+                    ctx.fill(star, with: .color(RGBA(0xFFC93C, 0.92).color))
+                    ctx.stroke(star, with: .color(RGBA(0xB8860B).color), lineWidth: 1.2)
+                }
+                var bridge = Path()
+                bridge.move(to: CGPoint(x: fx - ex + 7, y: ey - 1)); bridge.addLine(to: CGPoint(x: fx + ex - 7, y: ey - 1))
+                ctx.stroke(bridge, with: .color(RGBA(0xB8860B).color), lineWidth: 1.4)
             case .bow:
                 ctx.draw(Text(a.emoji).font(.system(size: 15)), at: CGPoint(x: cx + bw * 0.30, y: top + 5))
             case .tophat, .crown, .gradcap:
                 ctx.draw(Text(a.emoji).font(.system(size: a == .crown ? 20 : 23)), at: CGPoint(x: cx, y: top - (a == .crown ? 3 : 6)))
+            case .beanie:
+                var dome = Path()
+                dome.move(to: CGPoint(x: cx - bw * 0.40, y: top + 8))
+                dome.addQuadCurve(to: CGPoint(x: cx + bw * 0.40, y: top + 8), control: CGPoint(x: cx, y: top - 20))
+                dome.closeSubpath()
+                ctx.fill(dome, with: .color(RGBA(0x4F86C6).color))
+                ctx.stroke(dome, with: .color(RGBA(0x2E5C95).color), lineWidth: 1.4)
+                let band = CGRect(x: cx - bw * 0.43, y: top + 3, width: bw * 0.86, height: 8)
+                ctx.fill(Path(roundedRect: band, cornerRadius: 4), with: .color(RGBA(0x2E5C95).color))
+                for i in 0..<9 {
+                    let x = band.minX + 4 + CGFloat(i) * (band.width - 8) / 8
+                    var rib = Path(); rib.move(to: CGPoint(x: x, y: band.minY + 1.5)); rib.addLine(to: CGPoint(x: x, y: band.maxY - 1.5))
+                    ctx.stroke(rib, with: .color(.white.opacity(0.3)), lineWidth: 1)
+                }
+                ctx.fill(Path(ellipseIn: CGRect(x: cx - 5.5, y: top - 15, width: 11, height: 11)), with: .color(RGBA(0xF4F4F4).color))
+            case .flowercrown:
+                flowers(0xFF8FB1, center: 0xFFD54F, alt: 0xFFFFFF)
+            case .maicrown:
+                flowers(0xFFD23F, center: 0xE65100, alt: nil)
+            case .partyhat:
+                let c = cone(base: cx - 10, cx + 10, baseY: top + 5, tip: CGPoint(x: cx + 3, y: top - 22))
+                ctx.fill(c, with: .color(RGBA(0x7E57C2).color))
+                ctx.drawLayer { l in
+                    l.clip(to: c)
+                    for i in 0..<4 {
+                        var st = Path()
+                        let y = top + 2 - CGFloat(i) * 7
+                        st.move(to: CGPoint(x: cx - 14, y: y + 4)); st.addLine(to: CGPoint(x: cx + 14, y: y - 4))
+                        l.stroke(st, with: .color(RGBA(0xFFD54F).color), lineWidth: 2.4)
+                    }
+                }
+                ctx.stroke(c, with: .color(RGBA(0x4A2F8A).color), lineWidth: 1.2)
+                ctx.fill(Path(ellipseIn: CGRect(x: cx - 1, y: top - 26, width: 8, height: 8)), with: .color(RGBA(0xFF5C8A).color))
+            case .nonla:
+                let c = cone(base: cx - bw * 0.58, cx + bw * 0.58, baseY: top + 7, tip: CGPoint(x: cx, y: top - 17))
+                ctx.fill(c, with: .color(RGBA(0xEBD59C).color))
+                ctx.drawLayer { l in
+                    l.clip(to: c)
+                    for i in 1...3 {
+                        var ring = Path()
+                        let y = top + 7 - CGFloat(i) * 6
+                        let half = bw * 0.58 * (1 - CGFloat(i) * 6 / 24)
+                        ring.move(to: CGPoint(x: cx - half, y: y)); ring.addLine(to: CGPoint(x: cx + half, y: y))
+                        l.stroke(ring, with: .color(RGBA(0xB59A55, 0.7).color), lineWidth: 1)
+                    }
+                }
+                ctx.stroke(c, with: .color(RGBA(0x9C7F3A).color), lineWidth: 1.4)
+            case .bunnyband:
+                for side in [-1.0, 1.0] as [CGFloat] {
+                    let ear = Path(ellipseIn: CGRect(x: -4.5, y: -13, width: 9, height: 26))
+                        .applying(CGAffineTransform(rotationAngle: side * 0.22))
+                        .applying(CGAffineTransform(translationX: cx + side * 9, y: top - 9))
+                    ctx.fill(ear, with: .color(.white))
+                    ctx.stroke(ear, with: .color(RGBA(0xB0A8B9).color), lineWidth: 1.4)
+                    let inner = Path(ellipseIn: CGRect(x: -2, y: -9, width: 4, height: 17))
+                        .applying(CGAffineTransform(rotationAngle: side * 0.22))
+                        .applying(CGAffineTransform(translationX: cx + side * 9, y: top - 8))
+                    ctx.fill(inner, with: .color(RGBA(0xFFB3C7).color))
+                }
+                var band = Path()
+                band.move(to: CGPoint(x: cx - bw * 0.36, y: top + 5))
+                band.addQuadCurve(to: CGPoint(x: cx + bw * 0.36, y: top + 5), control: CGPoint(x: cx, y: top - 3))
+                ctx.stroke(band, with: .color(RGBA(0xF48FB1).color), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+            case .witchhat:
+                let brim = CGRect(x: cx - bw * 0.46, y: top - 1, width: bw * 0.92, height: 9)
+                let c = cone(base: cx - 14, cx + 14, baseY: top + 3, tip: CGPoint(x: cx + 9, y: top - 30), bend: -3)
+                ctx.fill(c, with: .color(RGBA(0x3A2A5A).color))
+                ctx.fill(Path(ellipseIn: brim), with: .color(RGBA(0x3A2A5A).color))
+                ctx.fill(Path(CGRect(x: cx - 13, y: top - 4, width: 26, height: 5)), with: .color(RGBA(0x8E44AD).color))
+                ctx.stroke(Path(roundedRect: CGRect(x: cx - 3, y: top - 4.5, width: 6, height: 6), cornerRadius: 1),
+                           with: .color(RGBA(0xFFC93C).color), lineWidth: 1.4)
+            case .santahat:
+                let c = cone(base: cx - bw * 0.36, cx + bw * 0.36, baseY: top + 5, tip: CGPoint(x: cx + bw * 0.30, y: top - 24), bend: 3)
+                ctx.fill(c, with: .color(RGBA(0xD32F2F).color))
+                ctx.stroke(c, with: .color(RGBA(0x8E1B1B).color), lineWidth: 1.2)
+                ctx.fill(Path(roundedRect: CGRect(x: cx - bw * 0.40, y: top - 1, width: bw * 0.80, height: 9), cornerRadius: 4.5),
+                         with: .color(RGBA(0xF7F7F7).color))
+                ctx.fill(Path(ellipseIn: CGRect(x: cx + bw * 0.30 - 5, y: top - 29, width: 10, height: 10)), with: .color(RGBA(0xF7F7F7).color))
             default:
                 break
             }
+        }
+
+        // Knitting during a focus session: a yarn ball and the piece growing on the needles.
+        if let craft = p.craft, mood == .focus {
+            let piece = CGRect(x: cx + bw * 0.46, y: by - 8 - CGFloat(max(0.08, craft)) * 22, width: 14, height: CGFloat(max(0.08, craft)) * 22)
+            ctx.fill(Path(roundedRect: piece, cornerRadius: 2), with: .color(RGBA(0xF48FB1).color))
+            for i in stride(from: piece.minY + 3, to: piece.maxY, by: 4) {
+                var row = Path(); row.move(to: CGPoint(x: piece.minX + 1, y: i)); row.addLine(to: CGPoint(x: piece.maxX - 1, y: i))
+                ctx.stroke(row, with: .color(.white.opacity(0.45)), style: StrokeStyle(lineWidth: 1, dash: [2, 2]))
+            }
+            let wiggle = CGFloat(sin(t * 6)) * 1.5
+            for dx in [-3.0, 3.0] as [CGFloat] {
+                var needle = Path()
+                needle.move(to: CGPoint(x: piece.midX + dx, y: piece.minY + 2))
+                needle.addLine(to: CGPoint(x: piece.midX + dx * 3 + wiggle, y: piece.minY - 9))
+                ctx.stroke(needle, with: .color(RGBA(0x8D6E63).color), style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
+            }
+            ctx.draw(Text("🧶").font(.system(size: 13)), at: CGPoint(x: cx - bw * 0.62, y: by - 6))
         }
 
         ctx = world
@@ -760,6 +942,39 @@ enum PetArt {
         p.addCurve(to: CGPoint(x: cx, y: top), control1: CGPoint(x: l, y: top + h * 0.22), control2: CGPoint(x: cx - w * 0.40, y: top))
         p.closeSubpath()
         return p
+    }
+
+    /// A five-pointed star.
+    static func star(at c: CGPoint, r: CGFloat) -> Path {
+        var p = Path()
+        for i in 0..<10 {
+            let a = Double(i) / 10 * 2 * .pi - .pi / 2
+            let rr = i % 2 == 0 ? r : r * 0.45
+            let pt = CGPoint(x: c.x + CGFloat(cos(a)) * rr, y: c.y + CGFloat(sin(a)) * rr)
+            if i == 0 { p.move(to: pt) } else { p.addLine(to: pt) }
+        }
+        p.closeSubpath()
+        return p
+    }
+
+    /// Where the pet stands while it's away on a trip: a little signpost with a suitcase.
+    static func drawTripSign(_ ctx: inout GraphicsContext, size: CGSize, emoji: String, place: String, back: String, t: Double) {
+        ctx.scaleBy(x: size.width / 120, y: size.height / 120)
+        ctx.fill(Path(ellipseIn: CGRect(x: 30, y: 109.5, width: 60, height: 7)), with: .color(.black.opacity(0.14)))
+        ctx.fill(Path(roundedRect: CGRect(x: 57, y: 62, width: 6, height: 50), cornerRadius: 2), with: .color(RGBA(0x8D6E63).color))
+        let board = CGRect(x: 14, y: 40, width: 92, height: 34)
+        let sway = CGFloat(sin(t * 1.3)) * 0.02
+        var b = ctx
+        b.translateBy(x: 60, y: 62)
+        b.rotate(by: .radians(Double(sway)))
+        b.translateBy(x: -60, y: -62)
+        b.fill(Path(roundedRect: board, cornerRadius: 6), with: .color(RGBA(0xFFE9C7).color))
+        b.stroke(Path(roundedRect: board, cornerRadius: 6), with: .color(RGBA(0x8D6E63).color), lineWidth: 2)
+        b.draw(Text("\(emoji) \(place)").font(.system(size: 12, weight: .bold, design: .rounded)).foregroundColor(RGBA(0x5D4037).color),
+               at: CGPoint(x: 60, y: 51))
+        b.draw(Text("↩︎ \(back)").font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundColor(RGBA(0x8D6E63).color),
+               at: CGPoint(x: 60, y: 65))
+        ctx.draw(Text("🧳").font(.system(size: 20)), at: CGPoint(x: 84, y: 101))
     }
 
     static func sparkle(at c: CGPoint, r: CGFloat) -> Path {

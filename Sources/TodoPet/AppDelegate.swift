@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var pet: PetController!
     private var bubbles: BubbleController!
     private let sign = SignController()
+    private var home: HomeController?
     private var board: BoardController!
     private var statusItem: NSStatusItem!
     private var settingsWindow: NSWindow?
@@ -109,11 +110,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }.store(in: &cancellables)
 
         setupStatusItem()
+        home = HomeController(life: brain.life, prefs: prefs)
         hotKey = HotKey(keyCode: UInt32(kVK_ANSI_T), modifiers: UInt32(controlKey | optionKey), id: 1) { [weak self] in
             MainActor.assumeIsolated { self?.openBoard(focusAdd: true) }
         }
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.pet.applySize() }
+            MainActor.assumeIsolated {
+                self?.pet.applySize()
+                self?.home?.place()
+            }
         }
         brain.start()
     }
@@ -208,6 +213,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _, _, _ in MainActor.assumeIsolated { self?.updateStatusTitle() } }
             .store(in: &cancellables)
+        brain.life.$state.map(\.trip).removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in MainActor.assumeIsolated { self?.updateStatusTitle() } }
+            .store(in: &cancellables)
         statusTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
                 if self?.brain.focus != nil { self?.updateStatusTitle() }
@@ -221,6 +230,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let f = brain.focus {
             let left = max(0, Int(f.end.timeIntervalSinceNow))
             button.title = "\(f.isBreak ? "☕" : "🍅") \(left / 60):\(String(format: "%02d", left % 60))"
+        } else if let trip = brain.life.state.trip {
+            button.title = "🧳 \(DayMath.timeString(trip.back))"
         } else if brain.hasToken {
             button.title = "\(brain.mood.emoji) \(brain.day.completed.count)/\(max(brain.target, brain.day.planned))"
         } else {
@@ -252,6 +263,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(ActionItem(L("Kết nối Todoist…", "Connect Todoist…")) { [weak self] in self?.openBoard(focusAdd: false) })
         }
         menu.addItem(.separator())
+        if brain.life.state.trip != nil {
+            menu.addItem(ActionItem(L("🧳 Gọi \(prefs.petName) về nhà", "🧳 Call \(prefs.petName) home")) { [weak self] in self?.brain.callBack() })
+        }
         menu.addItem(ActionItem(L("Gọi \(prefs.petName) về đây", "Call \(prefs.petName) over")) { [weak self] in self?.pet.comeHere() })
         if pet.isVisible {
             menu.addItem(ActionItem(L("Ẩn pet 1 giờ", "Hide pet for 1 hour")) { [weak self] in self?.hidePet(for: 3600) })
