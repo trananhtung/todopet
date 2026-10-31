@@ -75,7 +75,7 @@ struct BoardView: View {
             } else if state.showWishes {
                 WishesView(store: brain.wishes, brain: brain, state: state)
             } else if brain.hasToken, state.wardrobe {
-                WardrobeView(life: life, state: state, mood: brain.mood)
+                WardrobeView(life: life, state: state, prefs: prefs, mood: brain.mood)
             } else if brain.hasToken, let task = state.breakdown {
                 BreakdownView(task: task, brain: brain, state: state)
             } else if brain.hasToken {

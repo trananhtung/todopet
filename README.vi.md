@@ -10,9 +10,12 @@ Một chú pet nhỏ cho macOS, đi dạo trên thanh Dock, đọc công việc 
 
 ![Các tâm trạng](docs/moods.png)
 
+![Các tâm trạng của Bảnh Bao](docs/moods-person.png)
+
 ## Pet làm được gì
 
-- **Đi dạo trên màn hình.** Mochi đi qua đi lại trên Dock, nhìn theo con trỏ, và đứng lại khi bạn rê chuột vào. Kéo thả đi đâu cũng được, thả ra nó sẽ rơi xuống lại.
+- **Hai pet để chọn.** **Mochi**, bánh mochi tròn tai mèo, hoặc **Bảnh Bao**, một anh chàng tí hon tóc đen dựng, áo polo xám than, quần trắng, giày thể thao trắng và túi đeo chéo đen, hay giơ ngón cái khi mọi việc suôn sẻ (giơ cả hai khi bạn xong việc). Đổi trong **Cài đặt** hoặc ngay đầu tủ đồ; đồ mặc, tuổi và mọi kỷ niệm của pet vẫn giữ nguyên.
+- **Đi dạo trên màn hình.** Pet đi qua đi lại trên Dock, nhìn theo con trỏ, và đứng lại khi bạn rê chuột vào. Kéo thả đi đâu cũng được, thả ra nó sẽ rơi xuống lại.
 - **Hỏi "Hôm nay làm gì?".** Nếu hôm nay chưa có đủ **3 việc** (chỉnh được), pet sẽ nhắc bạn lên kế hoạch: buổi sáng hỏi nhẹ nhàng, qua giờ hạn chót thì nhắc gắt dần.
 - **Nhắc đúng việc cần làm.** Pet chọn việc tiếp theo theo kiểu "ăn con ếch trước" (ưu tiên cao nhất, rồi giờ sớm nhất), nhắc mỗi 45 phút, và báo trước 10 phút với việc có giờ cụ thể.
 - **Có tâm trạng tử tế.** Pet ăn mừng mỗi việc bạn xong (kể cả việc tích trong app Todoist). Khi có việc quá hạn, nhiều giờ không tiến triển hoặc chưa lên kế hoạch, pet **lo lắng** và gợi ý cách gỡ: kéo việc vào hôm nay, **🌱 Bắt đầu lại** (dời hết việc quá hạn sang mai), thử 2 phút, hoặc chia nhỏ việc to. Pet chỉ **nổi cáu** khi bạn ngồi trong app hay trang web gây xao nhãng trong giờ làm, và lúc đó nó hầm hầm đi về phía con trỏ chuột 😤

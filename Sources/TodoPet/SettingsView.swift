@@ -31,6 +31,9 @@ struct SettingsView: View {
                 Text(L("“Chỉ khi quan trọng”: kêu khi sắp họp, việc tới giờ, hết phiên tập trung và lúc ăn mừng xong việc; bong bóng thường im lặng.",
                        "“Important only”: chimes for meetings, tasks due now, the end of a focus session and finished tasks; ordinary bubbles stay silent."))
                     .font(.caption).foregroundColor(.secondary)
+                Picker(L("Hình dáng pet", "Pet"), selection: $prefs.species) {
+                    ForEach(Species.allCases) { Text($0.label).tag($0) }
+                }
                 Toggle(L("Khi nổi cáu thì đuổi theo con trỏ chuột", "Chase the mouse cursor when grumpy"), isOn: $prefs.chaseWhenAngry)
                 Toggle(L("Quậy khi bạn xao nhãng (càu nhàu, diễu hành với biển, đứng chắn màn hình)",
                          "Mischief while you're distracted (grumbling, sign parade, standing in the way)"), isOn: $prefs.antics)

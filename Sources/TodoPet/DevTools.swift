@@ -461,6 +461,17 @@ enum DevTools {
         let oldBook = try? JSONDecoder().decode(LifeState.self, from: Data(#"{"perfectDays":["a","b","c","d","e","f","g","h","i","j"]}"#.utf8))
         check(oldBook?.stickerPage == 2 && oldBook?.pageFilled == 4, "older saves pick up the sticker book where it would be")
 
+        // Species.
+        let speciesSuite = "com.todopet.selftest"
+        UserDefaults().removePersistentDomain(forName: speciesSuite)
+        let speciesBefore = currentSpecies
+        let speciesPrefs = Prefs(defaults: UserDefaults(suiteName: speciesSuite) ?? .standard)
+        check(speciesPrefs.species == .mochi, "Mochi is the default pet")
+        speciesPrefs.species = .person
+        check(currentSpecies == .person && PetPose(mood: .happy, t: 0).species == .person, "picking Bảnh Bao redraws every pet as him")
+        speciesPrefs.species = speciesBefore
+        UserDefaults().removePersistentDomain(forName: speciesSuite)
+
         // Language switch.
         let saved = currentLang
         currentLang = .en
@@ -486,6 +497,8 @@ enum DevTools {
         let prefs = Prefs(defaults: defaults)
         if let l = ProcessInfo.processInfo.environment["TODOPET_LANG"].flatMap(Lang.init(rawValue:)) { prefs.lang = l }
         savePNG(MoodSheet(), url.appendingPathComponent("moods.png"), scale: 2)
+        savePNG(MoodSheet(species: .person), url.appendingPathComponent("moods-person.png"), scale: 2)
+        savePNG(PersonOutfits(), url.appendingPathComponent("outfits-person.png"), scale: 2)
         savePNG(LifeSheet(), url.appendingPathComponent("life.png"), scale: 2)
         savePNG(OutfitSheet(), url.appendingPathComponent("outfits.png"), scale: 2)
         savePNG(IconArt(), url.appendingPathComponent("icon-1024.png"), scale: 1)
@@ -641,6 +654,7 @@ enum DevTools {
 
 /// Every mood, standing and walking, for docs and visual checks.
 struct MoodSheet: View {
+    var species: Species = .mochi
     let moods: [Mood] = [.happy, .normal, .annoyed, .angry, .sleeping, .focus, .celebrating]
 
     var body: some View {
@@ -689,8 +703,46 @@ struct MoodSheet: View {
     }
 
     private func pet(_ pose: PetPose) -> some View {
-        Canvas { ctx, size in PetArt.draw(&ctx, size: size, pose: pose) }
+        var pose = pose
+        pose.species = species
+        return Canvas { ctx, size in PetArt.draw(&ctx, size: size, pose: pose) }
             .frame(width: 120, height: 120)
+    }
+}
+
+/// Bảnh Bao in a few outfits, knitting, growing up, hungry and dirty.
+struct PersonOutfits: View {
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(Array(cases.enumerated()), id: \.offset) { _, c in
+                VStack(spacing: 0) {
+                    Canvas { ctx, size in PetArt.draw(&ctx, size: size, pose: c.1) }.frame(width: 110, height: 110)
+                    Text(c.0).font(.system(size: 10, weight: .semibold, design: .rounded))
+                }
+            }
+        }
+        .padding(10)
+        .background(Color.white)
+        .foregroundColor(.black)
+    }
+
+    private var cases: [(String, PetPose)] {
+        func pose(_ mood: Mood, _ edit: (inout PetPose) -> Void = { _ in }) -> PetPose {
+            var p = PetPose(mood: mood, t: 0.3)
+            p.species = .person
+            edit(&p)
+            return p
+        }
+        return [
+            ("witchhat", pose(.happy) { $0.wearing = [.witchhat] }),
+            ("nonla + scarf", pose(.normal) { $0.wearing = [.nonla, .scarf] }),
+            ("santa + bell", pose(.happy) { $0.wearing = [.santahat, .bellcollar] }),
+            ("round glasses", pose(.normal) { $0.wearing = [.roundglasses, .bandana] }),
+            ("knitting", pose(.focus) { $0.craft = 0.6 }),
+            ("baby", pose(.happy) { $0.stageScale = 0.8; $0.sprouts = 2 }),
+            ("hungry, dirty", pose(.annoyed) { $0.hungry = true; $0.dirt = 2 }),
+            ("held", pose(.normal) { $0.held = true }),
+        ]
     }
 }
 

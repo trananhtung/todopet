@@ -27,6 +27,8 @@ final class Prefs: ObservableObject {
 
     @Published var lang: Lang { didSet { currentLang = lang; d.set(lang.rawValue, forKey: "lang") } }
     @Published var petName: String { didSet { d.set(petName, forKey: "petName") } }
+    /// Mochi or Bảnh Bao.
+    @Published var species: Species { didSet { currentSpecies = species; d.set(species.rawValue, forKey: "species") } }
     /// How many tasks you should plan for each day (the "Rule of 3").
     @Published var dailyTarget: Int { didSet { d.set(dailyTarget, forKey: "dailyTarget") } }
     @Published var workStart: Int { didSet { d.set(workStart, forKey: "workStart") } }
@@ -104,6 +106,7 @@ final class Prefs: ObservableObject {
         ])
         lang = Lang(rawValue: d.string(forKey: "lang") ?? "") ?? .systemDefault
         petName = d.string(forKey: "petName") ?? "Mochi"
+        species = Species(rawValue: d.string(forKey: "species") ?? "") ?? .mochi
         dailyTarget = d.integer(forKey: "dailyTarget")
         workStart = d.integer(forKey: "workStart")
         workEnd = d.integer(forKey: "workEnd")
@@ -145,6 +148,7 @@ final class Prefs: ObservableObject {
             d.set(firstLaunch, forKey: "firstLaunch")
         }
         currentLang = lang
+        currentSpecies = species
     }
 
     var effectiveFilter: String {

@@ -23,6 +23,8 @@ struct PetPose {
     var hoverFor: Double = 0
     /// Knitting progress (0…1) during a focus session: a yarn ball and a growing piece beside the pet.
     var craft: Double?
+    /// Mochi or Bảnh Bao (the chibi person).
+    var species: Species = currentSpecies
 
     // Life: growth, hunger, dirt, accessories.
     var stageScale: Double = 1
@@ -86,7 +88,7 @@ struct PetPalette {
     }
 }
 
-/// Draws "Mochi", a round cat-eared mochi, in a 120×120 design space.
+/// Draws the pet ("Mochi", a round cat-eared mochi, or "Bảnh Bao", a chibi person) in a 120×120 design space.
 enum PetArt {
     static func draw(_ ctx: inout GraphicsContext, size: CGSize, pose p: PetPose) {
         let s = min(size.width, size.height) / 120
@@ -94,14 +96,17 @@ enum PetArt {
         ctx.scaleBy(x: s, y: s)
 
         // Growth stage: smaller when young, scaled around the point where the feet touch the ground.
-        let g = CGFloat(p.stageScale)
+        // Bảnh Bao is a little smaller overall, so his hair and hats fit.
+        let g = CGFloat(p.stageScale) * (p.species == .person ? 0.92 : 1)
         ctx.translateBy(x: 60, y: 113)
         ctx.scaleBy(x: g, y: g)
         ctx.translateBy(x: -60, y: -113)
 
         let t = p.t
         let k = max(0, min(1, p.blend))
-        var pal = PetPalette.of(p.prevMood).mix(PetPalette.of(p.mood), k * k * (3 - 2 * k))
+        let person = p.species == .person
+        let paletteOf = { (m: Mood) in person ? PersonArt.palette(m) : PetPalette.of(m) }
+        var pal = paletteOf(p.prevMood).mix(paletteOf(p.mood), k * k * (3 - 2 * k))
         let mood = p.held ? Mood.normal : p.mood
         let celebrating = mood == .celebrating
         if celebrating && p.golden {
@@ -189,10 +194,13 @@ enum PetArt {
 
         let cx: CGFloat = 60 + shakeX
         let ground: CGFloat = 113
-        let bw: CGFloat = 72 * (1 + squash) * (p.hungry && !celebrating ? 0.9 : 1)
-        let bh: CGFloat = 60 * (1 - squash) * (1 + breathe)
-        let by: CGFloat = ground - 5 - jump
+        // Mochi is all body; Bảnh Bao's "body" here is his big chibi head, with a little body below it.
+        let bw: CGFloat = (person ? 58 : 72) * (1 + squash) * (p.hungry && !celebrating ? 0.9 : 1)
+        let bh: CGFloat = (person ? 50 : 60) * (1 - squash) * (1 + breathe)
+        let by: CGFloat = ground - (person ? 40 : 5) - jump
         let top = by - bh
+        let pg = PersonArt.Geo(cx: cx, top: top, by: by, bw: bw, bh: bh, hipY: ground - 19 - jump, footY: ground - jump,
+                               line: pal.line.color, t: t)
 
         // Shadow on the ground.
         let shW = 56 * (1 - min(jump, 30) / 60)
@@ -201,7 +209,7 @@ enum PetArt {
 
         // Spins and back-flips turn the whole body around its middle; effects drawn later stay put.
         let world = ctx
-        let mid = CGPoint(x: cx, y: by - bh / 2)
+        let mid = CGPoint(x: cx, y: person ? ground - 45 - jump : by - bh / 2)
         if spinX != 1 || flipAngle != 0 {
             ctx.translateBy(x: mid.x, y: mid.y)
             if flipAngle != 0 { ctx.rotate(by: .radians(flipAngle * Double(-p.facing))) }
@@ -222,47 +230,53 @@ enum PetArt {
             liftL = max(0, CGFloat(sin(t * 5))) * 3
             liftR = max(0, CGFloat(-sin(t * 5))) * 3
         }
-        let dangle: CGFloat = p.held ? 4 : 0
-        let footFill = pal.bottom.mix(pal.line, 0.12).color
-        for (dx, lift) in [(-17 as CGFloat, liftL), (17, liftR)] {
-            let swing: CGFloat = p.held ? CGFloat(sin(t * 10 + Double(dx))) * 2 : 0
-            let r = CGRect(x: cx + dx - 8.5 + swing, y: by - 3 - lift + dangle, width: 17, height: 9)
-            ctx.fill(Path(ellipseIn: r), with: .color(footFill))
-            ctx.stroke(Path(ellipseIn: r), with: .color(pal.line.color), lineWidth: 2)
-        }
+        if person {
+            PersonArt.drawBody(&ctx, pg, liftL: liftL, liftR: liftR, facing: p.facing, held: p.held)
+            PersonArt.drawEars(&ctx, pg, ey: top + bh * 0.58, pal: pal)
+        } else {
+            let dangle: CGFloat = p.held ? 4 : 0
+            let footFill = pal.bottom.mix(pal.line, 0.12).color
+            for (dx, lift) in [(-17 as CGFloat, liftL), (17, liftR)] {
+                let swing: CGFloat = p.held ? CGFloat(sin(t * 10 + Double(dx))) * 2 : 0
+                let r = CGRect(x: cx + dx - 8.5 + swing, y: by - 3 - lift + dangle, width: 17, height: 9)
+                ctx.fill(Path(ellipseIn: r), with: .color(footFill))
+                ctx.stroke(Path(ellipseIn: r), with: .color(pal.line.color), lineWidth: 2)
+            }
 
-        // Ears (behind the body).
-        let earLift: CGFloat = switch mood {
-        case .happy, .celebrating: 1.0
-        case .normal, .focus: 0.92
-        case .annoyed: 0.7
-        case .angry: 0.5
-        case .sleeping: 0.55
-        }
-        for side in [-1.0, 1.0] as [CGFloat] {
-            let twitch: CGFloat = (mood == .happy && side > 0 && sin(t * 1.3) > 0.95) ? -3 : 0
-            let b1 = CGPoint(x: cx + side * bw * 0.08, y: top + bh * 0.12)
-            let b2 = CGPoint(x: cx + side * bw * 0.42, y: top + bh * 0.32)
-            let tip = CGPoint(x: cx + side * bw * (0.30 + (1 - earLift) * 0.32),
-                              y: top - bh * 0.22 * earLift + (1 - earLift) * 8 + twitch)
-            var ear = Path()
-            ear.move(to: b1); ear.addLine(to: tip); ear.addLine(to: b2); ear.closeSubpath()
-            ctx.fill(ear, with: .color(pal.top.color))
-            ctx.stroke(ear, with: .color(pal.line.color), style: StrokeStyle(lineWidth: 2.2, lineJoin: .round))
-            let c = CGPoint(x: (b1.x + b2.x + tip.x) / 3, y: (b1.y + b2.y + tip.y) / 3)
-            func inward(_ q: CGPoint) -> CGPoint { CGPoint(x: c.x + (q.x - c.x) * 0.5, y: c.y + (q.y - c.y) * 0.5 + 2) }
-            var inner = Path()
-            inner.move(to: inward(b1)); inner.addLine(to: inward(tip)); inner.addLine(to: inward(b2)); inner.closeSubpath()
-            ctx.fill(inner, with: .color(RGBA(0xFF9FB2, 0.7).color))
+            // Ears (behind the body).
+            let earLift: CGFloat = switch mood {
+            case .happy, .celebrating: 1.0
+            case .normal, .focus: 0.92
+            case .annoyed: 0.7
+            case .angry: 0.5
+            case .sleeping: 0.55
+            }
+            for side in [-1.0, 1.0] as [CGFloat] {
+                let twitch: CGFloat = (mood == .happy && side > 0 && sin(t * 1.3) > 0.95) ? -3 : 0
+                let b1 = CGPoint(x: cx + side * bw * 0.08, y: top + bh * 0.12)
+                let b2 = CGPoint(x: cx + side * bw * 0.42, y: top + bh * 0.32)
+                let tip = CGPoint(x: cx + side * bw * (0.30 + (1 - earLift) * 0.32),
+                                  y: top - bh * 0.22 * earLift + (1 - earLift) * 8 + twitch)
+                var ear = Path()
+                ear.move(to: b1); ear.addLine(to: tip); ear.addLine(to: b2); ear.closeSubpath()
+                ctx.fill(ear, with: .color(pal.top.color))
+                ctx.stroke(ear, with: .color(pal.line.color), style: StrokeStyle(lineWidth: 2.2, lineJoin: .round))
+                let c = CGPoint(x: (b1.x + b2.x + tip.x) / 3, y: (b1.y + b2.y + tip.y) / 3)
+                func inward(_ q: CGPoint) -> CGPoint { CGPoint(x: c.x + (q.x - c.x) * 0.5, y: c.y + (q.y - c.y) * 0.5 + 2) }
+                var inner = Path()
+                inner.move(to: inward(b1)); inner.addLine(to: inward(tip)); inner.addLine(to: inward(b2)); inner.closeSubpath()
+                ctx.fill(inner, with: .color(RGBA(0xFF9FB2, 0.7).color))
+            }
         }
 
         // Body.
-        let body = bodyPath(cx: cx, top: top, bottom: by, w: bw, h: bh)
+        let body = person ? PersonArt.headPath(cx: cx, top: top, w: bw, h: bh) : bodyPath(cx: cx, top: top, bottom: by, w: bw, h: bh)
         ctx.fill(body, with: .linearGradient(Gradient(colors: [pal.top.color, pal.bottom.color]),
                                              startPoint: CGPoint(x: cx, y: top), endPoint: CGPoint(x: cx, y: by)))
         ctx.fill(Path(ellipseIn: CGRect(x: cx - bw * 0.30, y: top + bh * 0.10, width: bw * 0.26, height: bh * 0.16)),
                  with: .color(.white.opacity(0.45)))
         ctx.stroke(body, with: .color(pal.line.color), lineWidth: 2.4)
+        if person { PersonArt.drawHair(&ctx, pg, mood: mood) }
 
         // Focus headband.
         if mood == .focus {
@@ -290,9 +304,9 @@ enum PetArt {
         // Face.
         let look = p.walking ? p.facing * 0.8 : p.lookX
         let fx = cx + look * bw * 0.07
-        let ey = top + bh * 0.48
-        let ex = bw * 0.185
-        let my = ey + bh * 0.21
+        let ey = top + bh * (person ? 0.58 : 0.48)
+        let ex = bw * (person ? 0.2 : 0.185)
+        let my = ey + bh * (person ? 0.2 : 0.21)
         let ink = RGBA(0x2B1B14).color
         let petted = p.hovered && (mood == .normal || mood == .happy)
 
@@ -391,6 +405,10 @@ enum PetArt {
             }
         }
 
+        if person, !p.held, p.gesture == nil || celebrating, [.happy, .normal, .celebrating, .sleeping].contains(mood) {
+            PersonArt.drawBrows(&ctx, fx: fx, ey: ey, ex: ex, raised: mood == .happy || mood == .celebrating ? 1.5 : 0)
+        }
+
         // Mouth.
         let mouthDark = RGBA(0x5A2A1E).color
         let tongue = RGBA(0xFF7A8A).color
@@ -470,62 +488,68 @@ enum PetArt {
             ctx.fill(e, with: .color(armFill))
             ctx.stroke(e, with: .color(pal.line.color), lineWidth: 2)
         }
-        let shoulderY = by - bh * 0.36
-        if p.held {
-            for side in [-1.0, 1.0] as [CGFloat] {
-                arm(CGPoint(x: cx + side * bw * 0.52, y: top + bh * 0.32), side * (2.4 + CGFloat(sin(t * 14)) * 0.3))
-            }
-        } else if p.gesture == .wave && !celebrating {
-            arm(CGPoint(x: cx - bw * 0.5, y: shoulderY), 0.35)
-            arm(CGPoint(x: cx + bw * 0.52, y: top + bh * 0.22), -2.5 + CGFloat(sin(t * 11)) * 0.55)
-        } else if p.gesture == .yawn && !celebrating {
-            let up = CGFloat(sin(p.gestureP * .pi))
-            for side in [-1.0, 1.0] as [CGFloat] {
-                arm(CGPoint(x: cx + side * bw * 0.5, y: shoulderY - up * bh * 0.2), side * (0.35 + 2.3 * up))
-            }
+        if person {
+            PersonArt.drawArms(&ctx, pg, pose: p, mood: mood, celebrating: celebrating, pal: pal)
         } else {
-            switch mood {
-            case .celebrating where p.celebration == .blessing:
-                // Both hands lifted close together, holding up the star.
+            let shoulderY = by - bh * 0.36
+            if p.held {
                 for side in [-1.0, 1.0] as [CGFloat] {
-                    arm(CGPoint(x: cx + side * bw * 0.3, y: top + bh * 0.04), side * 2.85)
+                    arm(CGPoint(x: cx + side * bw * 0.52, y: top + bh * 0.32), side * (2.4 + CGFloat(sin(t * 14)) * 0.3))
                 }
-            case .celebrating where p.celebration == .dance:
-                // Disco: one arm up, then the other.
-                let up = sin(t * 8) > 0
-                arm(CGPoint(x: cx - bw * 0.5, y: up ? top + bh * 0.18 : shoulderY), up ? -2.6 : 0.35)
-                arm(CGPoint(x: cx + bw * 0.5, y: up ? shoulderY : top + bh * 0.18), up ? -0.35 : 2.6)
-            case .celebrating:
-                for side in [-1.0, 1.0] as [CGFloat] {
-                    arm(CGPoint(x: cx + side * bw * 0.5, y: top + bh * 0.18), side * (2.6 + CGFloat(sin(t * 12)) * 0.25))
-                }
-            case .happy where !p.walking:
+            } else if p.gesture == .wave && !celebrating {
                 arm(CGPoint(x: cx - bw * 0.5, y: shoulderY), 0.35)
-                arm(CGPoint(x: cx + bw * 0.52, y: top + bh * 0.3), -2.3 + CGFloat(sin(t * 8)) * 0.45)
-            case .annoyed where !p.walking:
-                // Worried: hands held together in front, fidgeting.
-                let f = CGFloat(sin(t * 3)) * 0.15
-                arm(CGPoint(x: cx - bw * 0.25, y: by - bh * 0.1), 1.1 + f, w: 9, h: 12)
-                arm(CGPoint(x: cx + bw * 0.25, y: by - bh * 0.1), -1.1 - f, w: 9, h: 12)
-            case .angry:
+                arm(CGPoint(x: cx + bw * 0.52, y: top + bh * 0.22), -2.5 + CGFloat(sin(t * 11)) * 0.55)
+            } else if p.gesture == .yawn && !celebrating {
+                let up = CGFloat(sin(p.gestureP * .pi))
                 for side in [-1.0, 1.0] as [CGFloat] {
-                    let shake = CGFloat(sin(t * 20 + Double(side))) * 2
-                    let c = CGPoint(x: cx + side * bw * 0.5, y: top + bh * 0.52 + shake)
-                    let r = CGRect(x: c.x - 6, y: c.y - 6, width: 12, height: 12)
-                    ctx.fill(Path(ellipseIn: r), with: .color(armFill))
-                    ctx.stroke(Path(ellipseIn: r), with: .color(pal.line.color), lineWidth: 2)
+                    arm(CGPoint(x: cx + side * bw * 0.5, y: shoulderY - up * bh * 0.2), side * (0.35 + 2.3 * up))
                 }
-            case .sleeping:
-                break
-            default:
-                let swing: CGFloat = p.walking ? CGFloat(sin(p.walkPhase)) * 0.5 : CGFloat(sin(t * 2)) * 0.06
-                arm(CGPoint(x: cx - bw * 0.5, y: shoulderY), 0.35 + swing)
-                arm(CGPoint(x: cx + bw * 0.5, y: shoulderY), -0.35 + swing)
+            } else {
+                switch mood {
+                case .celebrating where p.celebration == .blessing:
+                    // Both hands lifted close together, holding up the star.
+                    for side in [-1.0, 1.0] as [CGFloat] {
+                        arm(CGPoint(x: cx + side * bw * 0.3, y: top + bh * 0.04), side * 2.85)
+                    }
+                case .celebrating where p.celebration == .dance:
+                    // Disco: one arm up, then the other.
+                    let up = sin(t * 8) > 0
+                    arm(CGPoint(x: cx - bw * 0.5, y: up ? top + bh * 0.18 : shoulderY), up ? -2.6 : 0.35)
+                    arm(CGPoint(x: cx + bw * 0.5, y: up ? shoulderY : top + bh * 0.18), up ? -0.35 : 2.6)
+                case .celebrating:
+                    for side in [-1.0, 1.0] as [CGFloat] {
+                        arm(CGPoint(x: cx + side * bw * 0.5, y: top + bh * 0.18), side * (2.6 + CGFloat(sin(t * 12)) * 0.25))
+                    }
+                case .happy where !p.walking:
+                    arm(CGPoint(x: cx - bw * 0.5, y: shoulderY), 0.35)
+                    arm(CGPoint(x: cx + bw * 0.52, y: top + bh * 0.3), -2.3 + CGFloat(sin(t * 8)) * 0.45)
+                case .annoyed where !p.walking:
+                    // Worried: hands held together in front, fidgeting.
+                    let f = CGFloat(sin(t * 3)) * 0.15
+                    arm(CGPoint(x: cx - bw * 0.25, y: by - bh * 0.1), 1.1 + f, w: 9, h: 12)
+                    arm(CGPoint(x: cx + bw * 0.25, y: by - bh * 0.1), -1.1 - f, w: 9, h: 12)
+                case .angry:
+                    for side in [-1.0, 1.0] as [CGFloat] {
+                        let shake = CGFloat(sin(t * 20 + Double(side))) * 2
+                        let c = CGPoint(x: cx + side * bw * 0.5, y: top + bh * 0.52 + shake)
+                        let r = CGRect(x: c.x - 6, y: c.y - 6, width: 12, height: 12)
+                        ctx.fill(Path(ellipseIn: r), with: .color(armFill))
+                        ctx.stroke(Path(ellipseIn: r), with: .color(pal.line.color), lineWidth: 2)
+                    }
+                case .sleeping:
+                    break
+                default:
+                    let swing: CGFloat = p.walking ? CGFloat(sin(p.walkPhase)) * 0.5 : CGFloat(sin(t * 2)) * 0.06
+                    arm(CGPoint(x: cx - bw * 0.5, y: shoulderY), 0.35 + swing)
+                    arm(CGPoint(x: cx + bw * 0.5, y: shoulderY), -0.35 + swing)
+                }
             }
         }
 
         // Young pets have little leaves on their head.
         if p.sprouts > 0 {
+            if person { ctx.translateBy(x: 0, y: -8) }
+            defer { if person { ctx.translateBy(x: 0, y: 8) } }
             let leaf = RGBA(0x6CC04A).color, stem = RGBA(0x3E8E2A).color
             var s = Path()
             s.move(to: CGPoint(x: cx, y: top + 1))
@@ -558,19 +582,24 @@ enum PetArt {
         }
 
         // Accessories.
+        // Neck items sit low on Mochi's body, and on Bảnh Bao's collar.
+        let nY = person ? by + 1 : by - bh * 0.40
+        let nD: CGFloat = person ? 22 : bh
+        let nHalf = person ? 19 : bw * 0.55
+        let neckClip = person ? PersonArt.torsoPath(pg) : body
         func neckBand(_ color: UInt32, accent: Color, dash: [CGFloat], tail: Bool) {
             ctx.drawLayer { c in
-                c.clip(to: body)
+                c.clip(to: neckClip)
                 var band = Path()
-                band.move(to: CGPoint(x: cx - bw * 0.55, y: by - bh * 0.40))
-                band.addQuadCurve(to: CGPoint(x: cx + bw * 0.55, y: by - bh * 0.40), control: CGPoint(x: cx, y: by - bh * 0.26))
+                band.move(to: CGPoint(x: cx - nHalf, y: nY))
+                band.addQuadCurve(to: CGPoint(x: cx + nHalf, y: nY), control: CGPoint(x: cx, y: nY + nD * 0.14))
                 c.stroke(band, with: .color(RGBA(color).color), lineWidth: 7)
                 c.stroke(band, with: .color(accent), style: StrokeStyle(lineWidth: 7, dash: dash))
             }
             guard tail else { return }
             let tailPath = Path(roundedRect: CGRect(x: -3, y: 0, width: 6, height: 13), cornerRadius: 2)
                 .applying(CGAffineTransform(rotationAngle: 0.25 + CGFloat(sin(t * 4)) * 0.08))
-                .applying(CGAffineTransform(translationX: cx + bw * 0.22, y: by - bh * 0.33))
+                .applying(CGAffineTransform(translationX: cx + (person ? 8 : bw * 0.22), y: nY + nD * 0.07))
             ctx.fill(tailPath, with: .color(RGBA(color).color))
         }
         func flowers(_ petal: UInt32, center: UInt32, alt: UInt32?) {
@@ -597,15 +626,19 @@ enum PetArt {
         }
         let face = mood != .sleeping && !p.held
         for a in p.wearing {
+            // Hats sit on top of Bảnh Bao's hair.
+            let lift: CGFloat = person && a.slot == .head ? -6 : 0
+            ctx.translateBy(x: 0, y: lift)
+            defer { ctx.translateBy(x: 0, y: -lift) }
             switch a {
             case .scarf:
                 neckBand(0xD84343, accent: .white.opacity(0.5), dash: [2, 5], tail: true)
             case .bandana:
                 neckBand(0x3B6FD8, accent: .white.opacity(0.8), dash: [1.5, 4], tail: false)
                 var knot = Path()
-                knot.move(to: CGPoint(x: cx - 8, y: by - bh * 0.33))
-                knot.addLine(to: CGPoint(x: cx + 8, y: by - bh * 0.33))
-                knot.addLine(to: CGPoint(x: cx, y: by - bh * 0.15))
+                knot.move(to: CGPoint(x: cx - 8, y: nY + nD * 0.07))
+                knot.addLine(to: CGPoint(x: cx + 8, y: nY + nD * 0.07))
+                knot.addLine(to: CGPoint(x: cx, y: nY + nD * 0.25 + (person ? 4 : 0)))
                 knot.closeSubpath()
                 ctx.fill(knot, with: .color(RGBA(0x3B6FD8).color))
                 ctx.stroke(knot, with: .color(RGBA(0x24479A).color), lineWidth: 1.2)
@@ -613,13 +646,13 @@ enum PetArt {
                 neckBand(0xD32F2F, accent: RGBA(0xFFC107).color, dash: [3, 4], tail: true)
             case .bellcollar:
                 ctx.drawLayer { c in
-                    c.clip(to: body)
+                    c.clip(to: neckClip)
                     var band = Path()
-                    band.move(to: CGPoint(x: cx - bw * 0.55, y: by - bh * 0.38))
-                    band.addQuadCurve(to: CGPoint(x: cx + bw * 0.55, y: by - bh * 0.38), control: CGPoint(x: cx, y: by - bh * 0.25))
+                    band.move(to: CGPoint(x: cx - nHalf, y: nY + nD * 0.02))
+                    band.addQuadCurve(to: CGPoint(x: cx + nHalf, y: nY + nD * 0.02), control: CGPoint(x: cx, y: nY + nD * 0.15))
                     c.stroke(band, with: .color(RGBA(0xC62828).color), lineWidth: 4)
                 }
-                let bell = CGRect(x: cx - 5, y: by - bh * 0.31, width: 10, height: 10)
+                let bell = CGRect(x: cx - 5, y: nY + nD * 0.09, width: 10, height: 10)
                 ctx.fill(Path(ellipseIn: bell), with: .color(RGBA(0xFFC93C).color))
                 ctx.stroke(Path(ellipseIn: bell), with: .color(RGBA(0xA67C00).color), lineWidth: 1.2)
                 var slit = Path()
@@ -759,7 +792,8 @@ enum PetArt {
 
         // Knitting during a focus session: a yarn ball and the piece growing on the needles.
         if let craft = p.craft, mood == .focus {
-            let piece = CGRect(x: cx + bw * 0.46, y: by - 8 - CGFloat(max(0.08, craft)) * 22, width: 14, height: CGFloat(max(0.08, craft)) * 22)
+            let kb = person ? ground - 2 : by
+            let piece = CGRect(x: cx + (person ? 22 : bw * 0.46), y: kb - 8 - CGFloat(max(0.08, craft)) * 22, width: 14, height: CGFloat(max(0.08, craft)) * 22)
             ctx.fill(Path(roundedRect: piece, cornerRadius: 2), with: .color(RGBA(0xF48FB1).color))
             for i in stride(from: piece.minY + 3, to: piece.maxY, by: 4) {
                 var row = Path(); row.move(to: CGPoint(x: piece.minX + 1, y: i)); row.addLine(to: CGPoint(x: piece.maxX - 1, y: i))
@@ -772,7 +806,7 @@ enum PetArt {
                 needle.addLine(to: CGPoint(x: piece.midX + dx * 3 + wiggle, y: piece.minY - 9))
                 ctx.stroke(needle, with: .color(RGBA(0x8D6E63).color), style: StrokeStyle(lineWidth: 1.6, lineCap: .round))
             }
-            ctx.draw(Text("🧶").font(.system(size: 13)), at: CGPoint(x: cx - bw * 0.62, y: by - 6))
+            ctx.draw(Text("🧶").font(.system(size: 13)), at: CGPoint(x: cx - (person ? 36 : bw * 0.62), y: kb - 6))
         }
 
         ctx = world

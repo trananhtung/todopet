@@ -89,6 +89,7 @@ struct LifeBar: View {
 struct WardrobeView: View {
     @ObservedObject var life: PetLife
     @ObservedObject var state: BoardState
+    @ObservedObject var prefs: Prefs
     let mood: Mood
 
     var body: some View {
@@ -98,6 +99,15 @@ struct WardrobeView: View {
                 Button { state.wardrobe = false } label: { Image(systemName: "chevron.left") }
                     .buttonStyle(.borderless)
                 Text(L("Tủ đồ & thành tích", "Wardrobe & achievements")).font(.headline)
+                Spacer()
+                Picker("", selection: $prefs.species) {
+                    Text("Mochi").tag(Species.mochi)
+                    Text("Bảnh Bao").tag(Species.person)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                .help(L("Đổi hình dáng pet; đồ, tuổi và kỷ niệm vẫn giữ nguyên", "Switch your pet's look; outfits, growth and memories stay"))
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {

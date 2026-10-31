@@ -10,9 +10,12 @@ English · <a href="README.vi.md">Tiếng Việt</a>
 
 ![Moods](docs/moods.png)
 
+![Bảnh Bao's moods](docs/moods-person.png)
+
 ## What it does
 
-- **Walks around your screen.** Mochi wanders along the Dock, looks at your cursor, and stops when you hover it. Drag it anywhere and it falls back down.
+- **Two pets to pick from.** **Mochi**, a round cat-eared mochi, or **Bảnh Bao**, a chibi guy with spiky black hair, a charcoal polo, white trousers, white sneakers and a black crossbody bag, who gives you a thumbs-up when things go well (two when you finish a task). The name is a pun: *bảnh bao* means dapper, *bánh bao* is a round steamed bun. Switch in **Settings** or at the top of the wardrobe; outfits, growth and everything the pet remembers stay.
+- **Walks around your screen.** Your pet wanders along the Dock, looks at your cursor, and stops when you hover it. Drag it anywhere and it falls back down.
 - **Asks "what are we doing today?"** If today has fewer than **3 tasks** (configurable), it asks you to plan, gently in the morning and more insistently once the planning deadline passes.
 - **Reminds you of the right task.** It picks the next task with "eat the frog" ordering (highest priority, then earliest time), nudges you every 45 minutes, and pings you 10 minutes before timed tasks.
 - **Has kind moods.** It celebrates every completed task (including ones you tick off in the Todoist app). When tasks are overdue, nothing moves for hours or the day isn't planned, it gets **worried** and offers help: pull tasks into today, a **🌱 Fresh start** that moves every overdue task to tomorrow, a 2-minute start, or splitting a big task. It only gets **grumpy** while you sit in a distracting app or website during work hours, and then it marches toward your cursor 😤
