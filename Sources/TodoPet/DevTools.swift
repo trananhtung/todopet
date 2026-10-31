@@ -472,6 +472,27 @@ enum DevTools {
         speciesPrefs.species = speciesBefore
         UserDefaults().removePersistentDomain(forName: speciesSuite)
 
+        // Claude coach.
+        var cc = CoachContext(kind: "distract", petName: "Mochi", persona: "a round cat-eared mochi", mood: "angry",
+                              nextTask: "Viết báo cáo tuần", done: 1, planned: 3, target: 3, overdue: 2,
+                              minutesWithoutProgress: 140, fallback: "Ê! Đang youtube.com đó hả?")
+        cc.distraction = "youtube.com"
+        cc.distractionMinutes = 12
+        cc.ignoredInRow = 2
+        cc.recent = ["Tắt YouTube đi!"]
+        let up = CoachPrompt.user(cc)
+        check(up.contains("“Viết báo cáo tuần”") && up.contains("youtube.com for 12 minutes") && up.contains("1 of 3")
+              && up.contains("Escalation: 3/3") && up.contains("“Tắt YouTube đi!”"), "coach prompt: the task, the site, the counts and escalation")
+        check(CoachPrompt.system(tone: .harsh, lang: .vi).contains("Vietnamese") && CoachPrompt.system(tone: .harsh, lang: .vi).contains("never the")
+              && CoachPrompt.system(tone: .gentle, lang: .en).contains("Warm"), "coach system prompt: language and tone, harsh but never personal")
+        check(CoachPrompt.parse(#"{"text":"  \"Mở file báo cáo NGAY!\"  "}"#) == "Mở file báo cáo NGAY!" && CoachPrompt.parse(#"{"text":"  "}"#) == nil
+              && CoachPrompt.parse("not json") == nil, "coach reply: trimmed, empty or broken replies fall back to the pet's line")
+        check(ClaudeClient.hasServerFallback("claude-opus-5-5") && ClaudeClient.hasServerFallback("claude-sonnet-5-5")
+              && !ClaudeClient.hasServerFallback("claude-haiku-5-5"), "refusal fallbacks only where the API offers them")
+        let thinkingFirst = #"{"content":[{"type":"thinking","thinking":""},{"type":"text","text":"{\"text\":\"Go!\"}"}],"stop_reason":"end_turn"}"#
+        check((try? ClaudeClient.text(Data(thinkingFirst.utf8))) == #"{"text":"Go!"}"#, "reads the text block after thinking blocks")
+        check((try? ClaudeClient.text(Data(#"{"content":[],"stop_reason":"refusal"}"#.utf8))) == nil, "a refusal is an error, not a line")
+
         // Language switch.
         let saved = currentLang
         currentLang = .en

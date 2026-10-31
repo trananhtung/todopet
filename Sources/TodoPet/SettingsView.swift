@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var busy = false
     @State private var message: String?
     @State private var claudeKey = ""
+    @State private var coachTry: String?
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     private func hour(_ h: Int) -> String { String(format: "%02d:00", h) }
@@ -185,6 +186,38 @@ struct SettingsView: View {
                            "During meetings the pet stays quiet and doesn't count it as slacking. About 1 important task per 2 free hours."))
                         .font(.caption).foregroundColor(.secondary)
                 }
+            }
+
+            Section(L("Huấn luyện viên Claude 🔥", "Claude coach 🔥")) {
+                Toggle(L("Để Claude viết lời nhắc theo đúng việc của bạn", "Let Claude write the reminders, about your actual tasks"), isOn: $prefs.coachOn)
+                    .disabled(!brain.hasClaudeKey)
+                if !brain.hasClaudeKey {
+                    Text(L("Cần API key Claude: thêm ở mục “Việc bị dời mãi” bên dưới.", "Needs a Claude API key: add it under “Postponed tasks” below."))
+                        .font(.caption).foregroundColor(.orange)
+                }
+                Picker(L("Độ gắt", "Tone"), selection: $prefs.coachTone) {
+                    ForEach(CoachTone.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                Picker(L("Model", "Model"), selection: $prefs.coachModel) {
+                    ForEach(CoachModel.presets, id: \.id) { Text($0.label).tag($0.id) }
+                    if !CoachModel.presets.contains(where: { $0.id == prefs.coachModel }) {
+                        Text(prefs.coachModel).tag(prefs.coachModel)
+                    }
+                }
+                Toggle(L("Nhắc liên tục (nghiêm khắc): nhắc dày gấp đôi, không tự lùi khi bạn bỏ qua",
+                         "Relentless: reminders twice as often, no backing off when you ignore them"), isOn: $prefs.strictMode)
+                HStack {
+                    Button(L("Thử một câu", "Try a line")) {
+                        coachTry = "…"
+                        Task { coachTry = await brain.coachSample() }
+                    }
+                    .disabled(!brain.hasClaudeKey)
+                    if let coachTry { Text(coachTry).font(.caption).lineLimit(3) }
+                }
+                Text(L("Hôm nay Claude đã viết \(brain.coachCallsToday)/\(Brain.coachCap) lời nhắc. Mỗi lời nhắc gửi tên việc, số việc và tên trang đang xao nhãng tới api.anthropic.com. Lời nhắc họp, việc có giờ vẫn giữ nguyên. Kể cả khi gắt, pet vẫn không chen vào lúc bạn đang họp, đang tập trung hay đang gõ phím liền mạch.",
+                       "Claude wrote \(brain.coachCallsToday)/\(Brain.coachCap) reminders today. Each one sends task titles, counts and the distracting site's name to api.anthropic.com. Meeting and due-time reminders keep their exact wording. Even when harsh, the pet never interrupts meetings, focus sessions or steady typing."))
+                    .font(.caption).foregroundColor(.secondary)
             }
 
             Section(L("Việc bị dời mãi", "Postponed tasks")) {

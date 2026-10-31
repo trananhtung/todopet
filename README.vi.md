@@ -128,6 +128,17 @@ Với chữ ký ad-hoc, macOS hỏi lại quyền Lịch và trình duyệt sau 
 
 Thêm API key Anthropic trong **Cài đặt → Việc bị dời mãi** ([lấy key](https://console.anthropic.com/settings/keys)). Khi bạn bấm **Nhờ Claude gợi ý**, tên và ghi chú của việc được gửi tới Claude API, và Claude trả về 3–5 bước nhỏ. App dùng `claude-opus-5-5` ở mức effort thấp, có bật fallback phía máy chủ phòng khi yêu cầu bị từ chối. Mỗi lần khoảng 1–2 xu Mỹ; bạn đổi được model trong Cài đặt. Không có key thì bạn vẫn tự gõ các bước hoặc dùng mẫu nhanh.
 
+### Huấn luyện viên Claude: lời nhắc viết riêng cho bạn, gắt tuỳ ý (tuỳ chọn)
+
+Với cùng API key, bật **Cài đặt → Huấn luyện viên Claude**, Claude sẽ viết từng lời nhắc theo đúng những gì đang diễn ra: việc bạn đang né, bao lâu rồi chưa có tiến triển, trang bạn đang lướt, bạn đã lờ bao nhiêu lời nhắc. Mỗi lần bạn lờ đi, lời nhắc sau sẽ gắt hơn.
+
+- **Độ gắt:** *Nhẹ nhàng*, *Thẳng thắn*, hoặc *Gắt 🔥*: một huấn luyện viên kiểu trung sĩ, đánh thẳng vào sự trì hoãn và mọi lý do bào chữa (không xúc phạm con người bạn, không chửi thề).
+- **Model:** Claude Opus 5.5 (mặc định, hay nhất, ≈ $0.01 mỗi lời nhắc), Claude Sonnet 5.5 (≈ $0.005) hoặc Claude Haiku 5.5 (nhanh và rẻ nhất, ≈ $0.0003). Ước tính theo bảng giá của Anthropic cho một yêu cầu ngắn ở mức effort thấp.
+- **Nhắc liên tục (nghiêm khắc):** nhắc dày gấp đôi (nhắc việc tiếp theo tối đa 20 phút một lần, ít nhất 30 lời nhắc mỗi ngày), và bạn có lờ đi thì pet cũng không thưa bớt hay tạm im.
+- Nút **Thử một câu** cho xem ngay huấn luyện viên sẽ nói gì lúc này.
+
+Claude viết lại các lời nhắc có tính vào ngân sách (việc tiếp theo, lên kế hoạch, quá hạn, xao nhãng, trò quậy, việc bị dời mãi, đói, chào khi quay lại); lời nhắc họp và việc có giờ giữ nguyên câu chữ, và không gì chen vào lúc bạn đang họp, đang tập trung hay đang gõ phím liền mạch. Nếu Claude chậm hoặc lỗi, pet dùng câu của chính nó. Tối đa 80 lời nhắc do Claude viết mỗi ngày. Mỗi yêu cầu là một lượt gọi ngắn, effort thấp, trả về JSON (có dự phòng khi bị từ chối với Opus và Sonnet), và gửi tên việc, số việc và tên trang đang xao nhãng tới `api.anthropic.com`.
+
 ### Dùng Todoist qua Claude hoặc AI khác (MCP)
 
 TodoPet nói chuyện trực tiếp với Todoist bằng API token. Nếu bạn muốn quản lý việc bằng cách chat với trợ lý AI, hãy kết nối MCP server chính thức của Todoist tại `https://ai.todoist.net/mcp`. Với Claude Code: `claude mcp add --transport http todoist https://ai.todoist.net/mcp`; với Claude Desktop thì thêm làm custom connector. Việc tạo ở đó sẽ hiện trên pet trong vòng 3 phút, hoặc ngay khi bạn bấm vào pet.
@@ -234,7 +245,7 @@ Hành vi của pet dựa trên các phương pháp năng suất phổ biến, c�
 
 ## Quyền riêng tư
 
-- Không thu thập dữ liệu, không có máy chủ riêng. Kết nối mạng chỉ tới `api.todoist.com`, và tới `api.anthropic.com` khi bạn bấm **Nhờ Claude gợi ý**.
+- Không thu thập dữ liệu, không có máy chủ riêng. Kết nối mạng chỉ tới `api.todoist.com`, và tới `api.anthropic.com` khi bạn bấm **Nhờ Claude gợi ý** hoặc bật **Huấn luyện viên Claude** (khi đó tên việc, số việc và tên trang đang xao nhãng đi kèm mỗi lời nhắc Claude viết).
 - Phát hiện xao nhãng đọc **tên app đang mở phía trước** và, nếu đó là trình duyệt, **địa chỉ và tiêu đề tab đang mở**. Chúng chỉ nằm trong bộ nhớ, không được lưu hay gửi đi đâu. Không cần quay màn hình hay quyền trợ năng.
 - Thẻ **"Mình đang làm dở gì nhỉ?"** nhớ việc, ứng dụng, tiêu đề trang và địa chỉ (chỉ http/https, đã bỏ mọi thứ trông giống token hay phiên đăng nhập) bạn đang làm, cùng bước tiếp theo bạn ghim. Tất cả **chỉ nằm trong bộ nhớ**: không lưu, không ghi vào nhật ký, quên lúc nửa đêm. Cửa sổ ẩn danh không bao giờ được ghi nhớ, và **Cài đặt** có thể bỏ tiêu đề và địa chỉ ra khỏi thẻ.
 - Hẹn **Bắt đầu khi…**, con ếch và lời nhắn cho ngày mai được lưu trong tuỳ chọn cục bộ của app tới khi ngày đó qua.

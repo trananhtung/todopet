@@ -12,7 +12,7 @@ struct BubbleAction: Identifiable {
 
 struct Bubble: Identifiable {
     let id = UUID()
-    let text: String
+    var text: String
     var actions: [BubbleAction] = []
     var seconds: Double = 12
     /// Bubbles with `urgent` may replace a bubble that is still on screen.
@@ -610,6 +610,15 @@ final class Brain: ObservableObject {
         if let cur = bubble, !cur.actions.isEmpty, !b.urgent, b.actions.isEmpty { return }
         // On a trip only urgent bubbles and replies get through.
         if life.state.trip != nil, why != nil, !b.urgent { return }
+        // The Claude coach rewrites counted reminders in its own words.
+        if let kind, Brain.coachKinds.contains(kind), coachReady {
+            coach(b, chime: chime, why: why, antic: antic, kind: kind)
+            return
+        }
+        present(b, chime: chime, why: why, antic: antic, kind: kind)
+    }
+
+    private func present(_ b: Bubble, chime: Chime, why: String?, antic: Bool, kind: String?) {
         var b = b
         b.reminder = why != nil
         b.kind = kind
@@ -633,7 +642,114 @@ final class Brain: ObservableObject {
     }
 
     /// Unsolicited reminders left in today's budget.
-    var nudgesLeft: Int { max(0, prefs.nudgeBudget - life.state.dayNudges) }
+    var nudgesLeft: Int { max(0, nudgeBudget - life.state.dayNudges) }
+
+    /// Strict mode: at least 30 reminders a day, twice as often, no backing off and no hold.
+    var nudgeBudget: Int { prefs.strictMode ? max(prefs.nudgeBudget, 30) : prefs.nudgeBudget }
+
+    /// A rule's interval, halved in strict mode.
+    private func pace(_ minutes: Double) -> Double { prefs.strictMode ? minutes / 2 : minutes }
+
+    // MARK: - Claude coach
+
+    /// The reminders the coach writes (meetings and timed tasks keep their exact wording).
+    static let coachKinds: Set<String> = ["nudge", "plan", "overdue", "distract", "grumble", "antic", "stuck", "hungry", "welcome"]
+    static let coachCap = 80
+    @Published private(set) var coachCallsToday = 0
+    private var coachDay = ""
+    private var coachPending = false
+    private var coachRecent: [String] = []
+
+    private var coachReady: Bool {
+        prefs.coachOn && hasClaudeKey && !isDemo && !coachPending && coachCalls() < Brain.coachCap
+    }
+
+    private func coachCalls() -> Int {
+        if coachDay != dayKey {
+            coachDay = dayKey
+            coachCallsToday = 0
+        }
+        return coachCallsToday
+    }
+
+    private func coachContext(kind: String, fallback: String) -> CoachContext {
+        let now = Date()
+        var c = CoachContext(kind: kind, petName: prefs.petName,
+                             persona: prefs.species == .person ? "a tiny dapper guy who gives thumbs-ups" : "a round cat-eared mochi",
+                             mood: mood == .annoyed ? "worried" : mood.rawValue, nextTask: day.next?.title,
+                             done: day.completed.count, planned: day.planned, target: target, overdue: day.overdue.count,
+                             minutesWithoutProgress: Int(now.timeIntervalSince(lastProgress) / 60), fallback: fallback)
+        if let d = distraction {
+            c.distraction = d.app
+            c.distractionMinutes = Int(d.minutes)
+        }
+        if let next = day.next, let s = stuck.first(where: { $0.task.id == next.id }) { c.stuckDays = s.days }
+        c.ignoredInRow = life.state.dismissedInRow
+        c.remindersToday = life.state.dayNudges
+        c.time = DayMath.timeString(now)
+        c.recent = Array(coachRecent.suffix(5))
+        return c
+    }
+
+    /// Asks Claude for the bubble's words, then shows it; on any error the pet's own line shows instead.
+    private func coach(_ b: Bubble, chime: Chime, why: String?, antic: Bool, kind: String) {
+        guard let key = Keychain.read(.anthropic) else {
+            present(b, chime: chime, why: why, antic: antic, kind: kind)
+            return
+        }
+        coachPending = true
+        coachCallsToday += 1
+        lastBubbleAt = Date()
+        let context = coachContext(kind: kind, fallback: b.text)
+        let model = prefs.effectiveCoachModel, tone = prefs.coachTone, lang = currentLang
+        let started = Date()
+        Task { [weak self] in
+            var text: String?
+            var failure: String?
+            do {
+                text = try await CoachClient(apiKey: key, model: model).line(context, tone: tone, lang: lang)
+            } catch {
+                failure = error.localizedDescription
+            }
+            guard let self else { return }
+            coachPending = false
+            let seconds = String(format: "%.1f", Date().timeIntervalSince(started))
+            if let failure {
+                log.add(.system, L("Claude chưa viết được lời nhắc (\(failure)), dùng câu của pet", "Claude couldn't write the reminder (\(failure)), using the pet's own line"),
+                        throttle: "coach-error", every: 30)
+            } else {
+                log.add(.system, L("Claude (\(model)) viết lời nhắc trong \(seconds) giây", "Claude (\(model)) wrote the reminder in \(seconds) s"),
+                        throttle: "coach-ok", every: 60)
+            }
+            // A focus session started while Claude was writing: a non-urgent reminder waits.
+            if focus != nil && !b.urgent { return }
+            var out = b
+            if let text {
+                out.text = text
+                coachRecent.append(text)
+                coachRecent = Array(coachRecent.suffix(8))
+            }
+            present(out, chime: chime, why: why.map { $0 + (text != nil ? " · Claude" : "") }, antic: antic, kind: kind)
+        }
+    }
+
+    /// Settings → "Try a line": what the coach would say right now (not counted against the budget).
+    func coachSample() async -> String {
+        guard let key = Keychain.read(.anthropic) else { return ClaudeError.noKey.localizedDescription }
+        let fallback = day.next.map { Lines.nudge(mood: mood, next: $0, hoursIdle: Date().timeIntervalSince(lastProgress) / 3600) }
+            ?? Lines.plan(mood: mood, planned: day.planned, target: target)
+        do {
+            let text = try await CoachClient(apiKey: key, model: prefs.effectiveCoachModel)
+                .line(coachContext(kind: day.next == nil ? "plan" : "nudge", fallback: fallback), tone: prefs.coachTone, lang: currentLang)
+            coachCallsToday += 1
+            coachRecent.append(text)
+            bubble = Bubble(text: text, seconds: 20, urgent: true)
+            lastBubbleAt = Date()
+            return text
+        } catch {
+            return "⚠️ " + error.localizedDescription
+        }
+    }
 
     /// What you did with the last bubble: tapped a button, closed it, or let it fade away.
     enum BubbleResponse {
@@ -667,7 +783,7 @@ final class Brain: ObservableObject {
             s.dismissedInRow += 1
         }
         if let m { log.add(.hold, L("→ lời nhắc “\(kind)” thưa hơn (×\(m))", "→ “\(kind)” reminders back off (×\(m))")) }
-        if life.state.dismissedInRow >= Brain.holdAfter {
+        if !prefs.strictMode, life.state.dismissedInRow >= Brain.holdAfter {
             let until = Date().addingTimeInterval(60 * 60)
             life.mutate { s in
                 s.dismissedInRow = 0
@@ -684,14 +800,14 @@ final class Brain: ObservableObject {
 
     /// May an unsolicited reminder speak now? Not once today's budget is spent, nor during a hold after three refusals.
     private func mayRemind(_ kind: String) -> Bool {
-        if life.state.dayNudges >= prefs.nudgeBudget {
+        if life.state.dayNudges >= nudgeBudget {
             if once("budget-\(dayKey)") {
                 log.add(.hold, L("Hôm nay hết lượt nhắc (tối đa \(prefs.nudgeBudget)): mình im lặng tới mai, trừ việc gấp",
                                  "No reminders left today (budget \(prefs.nudgeBudget)): quiet until tomorrow, except urgent ones"))
             }
             return false
         }
-        if let until = life.state.nudgeHoldUntil, Date() < until {
+        if !prefs.strictMode, let until = life.state.nudgeHoldUntil, Date() < until {
             log.add(.hold, L("Giữ lời nhắc “\(kind)” tới \(DayMath.timeString(until)): bạn vừa bỏ qua \(Brain.holdAfter) lời nhắc liên tiếp",
                              "Held a reminder (\(kind)) until \(DayMath.timeString(until)): you passed on \(Brain.holdAfter) in a row"),
                     throttle: "hold-dismissed-\(kind)", every: 15)
@@ -1032,7 +1148,7 @@ final class Brain: ObservableObject {
                 return
             }
         }
-        if bubble != nil { return }
+        if bubble != nil || coachPending { return }
 
         // Meeting bookends: after a meeting of 15+ minutes, "anything to capture?", and a breather before the next one.
         if let pm = pendingAfterMeeting {
@@ -1091,7 +1207,7 @@ final class Brain: ObservableObject {
         // Distraction apps and sites come first: there's no concentration to protect right then.
         // Grumpy and stuck on one for 5+ minutes: the pet jumps in the way.
         if prefs.antics, ctx.inWork, mood == .angry, now > anticSnoozedUntil, day.open.count > 0, let d = distraction,
-           d.minutes >= 5, mayRemind("antic"), every("antic", minutes: 20) {
+           d.minutes >= 5, mayRemind("antic"), every("antic", minutes: pace(20)) {
             antic = AnticEvent(kind: .block, start: now)
             say(Bubble(text: Lines.block(app: d.app, next: day.next), actions: [focusAction(day.next), spareAction()],
                        seconds: 25, urgent: true), chime: .grumble,
@@ -1100,7 +1216,7 @@ final class Brain: ObservableObject {
             speak(Lines.voiceBlock(app: d.app))
             return
         }
-        if ctx.inWork, day.open.count > 0, let d = distraction, d.minutes >= 2, mayRemind("distract"), every("distract", minutes: 10) {
+        if ctx.inWork, day.open.count > 0, let d = distraction, d.minutes >= 2, mayRemind("distract"), every("distract", minutes: pace(10)) {
             say(Bubble(text: Lines.distraction(mood: mood, app: d.app, left: day.open.count, next: day.next), actions: [
                 focusAction(day.next),
                 BubbleAction(title: L("Nghỉ xíu thôi (10')", "Just a quick break (10')"), neutral: true) { [weak self] in
@@ -1142,11 +1258,11 @@ final class Brain: ObservableObject {
         // (a typing break or an app switch), and at most one unsolicited bubble per `bubbleGap` minutes.
         // Held reminders are written to the diary so the thresholds can be tuned.
         let somethingDue = ctx.inWork && (
-            (day.planned < target && ctx.hoursAfterPlanDeadline >= 0 && isDue("plan", minutes: 30))
-                || (day.next != nil && now.timeIntervalSince(lastBubbleAt) > Double(prefs.remindEvery) * 60
-                    && isDue("nudge", minutes: Double(prefs.remindEvery)))
+            (day.planned < target && ctx.hoursAfterPlanDeadline >= 0 && isDue("plan", minutes: pace(30)))
+                || (day.next != nil && now.timeIntervalSince(lastBubbleAt) > remindMinutes * 60
+                    && isDue("nudge", minutes: remindMinutes))
                 || stuck.contains { fired["stuck-\($0.task.id)-\(dayKey)"] == nil }
-                || (life.state.hungry && isDue("hungry", minutes: 60)))
+                || (life.state.hungry && isDue("hungry", minutes: pace(60))))
         if flow {
             if somethingDue {
                 log.add(.hold, L("Có lời nhắc đến hạn nhưng bạn đang vào guồng — để sau", "A reminder is due but you're in the zone — later"),
@@ -1161,7 +1277,7 @@ final class Brain: ObservableObject {
             }
             return
         }
-        if !CalmRules.withinBudget(lastBubbleAt: lastBubbleAt, now: now, minGap: Double(prefs.bubbleGap)) {
+        if !CalmRules.withinBudget(lastBubbleAt: lastBubbleAt, now: now, minGap: prefs.strictMode ? min(Double(prefs.bubbleGap), 6) : Double(prefs.bubbleGap)) {
             if somethingDue {
                 log.add(.hold, L("Hoãn nhắc: lần nhắc trước lúc \(DayMath.timeString(lastBubbleAt)), cần cách ít nhất \(prefs.bubbleGap) phút",
                                  "Held a reminder: last one at \(DayMath.timeString(lastBubbleAt)), at least \(prefs.bubbleGap) min apart"),
@@ -1232,7 +1348,7 @@ final class Brain: ObservableObject {
         }
 
         // 4. Not planned enough: a reminder every 30 minutes once the planning deadline passed.
-        if ctx.inWork, day.planned < target, ctx.hoursAfterPlanDeadline >= 0, mayRemind("plan"), every("plan", minutes: 30) {
+        if ctx.inWork, day.planned < target, ctx.hoursAfterPlanDeadline >= 0, mayRemind("plan"), every("plan", minutes: pace(30)) {
             say(Bubble(text: Lines.plan(mood: mood, planned: day.planned, target: target), actions: planActions(), seconds: 60),
                 why: L("đã qua \(prefs.planDeadline)h mà mới có \(day.planned)/\(target) việc", "past \(prefs.planDeadline):00 with only \(day.planned)/\(target) planned"),
                 kind: "plan")
@@ -1240,7 +1356,7 @@ final class Brain: ObservableObject {
         }
 
         // 6. A task that keeps getting postponed: offer to split it (or drop it). Once per task per day.
-        if ctx.inWork, let s = stuck.first(where: { fired["stuck-\($0.task.id)-\(dayKey)"] == nil }), mayRemind("stuck"), every("stuck", minutes: 120) {
+        if ctx.inWork, let s = stuck.first(where: { fired["stuck-\($0.task.id)-\(dayKey)"] == nil }), mayRemind("stuck"), every("stuck", minutes: pace(120)) {
             fired["stuck-\(s.task.id)-\(dayKey)"] = now
             say(Bubble(text: Lines.stuck(s, mood: mood), actions: [
                 BubbleAction(title: L("✂️ Chia nhỏ", "✂️ Split it"), primary: true) { [weak self] in self?.openBreakdown?(s.task) },
@@ -1252,7 +1368,7 @@ final class Brain: ObservableObject {
         }
 
         // 6b. A hungry pet begs for a finished task.
-        if ctx.inWork, life.state.hungry, mayRemind("hungry"), every("hungry", minutes: 60) {
+        if ctx.inWork, life.state.hungry, mayRemind("hungry"), every("hungry", minutes: pace(60)) {
             say(Bubble(text: Lines.hungry(life.state.satiety, next: day.next),
                        actions: day.next.map { [focusAction($0), laterAction()] } ?? [], seconds: 30),
                 why: L("độ no còn \(Int(life.state.satiety))%", "only \(Int(life.state.satiety))% full"), kind: "hungry")
@@ -1263,7 +1379,7 @@ final class Brain: ObservableObject {
         // 6c. Mischief, only while you're on a distracting app or site (never after a bad day: that only makes it worse).
         // Grumbling, then a parade with the task on a sign. Never while you're typing.
         if prefs.antics, ctx.inWork, now > anticSnoozedUntil, CalmRules.secondsSinceKey() > 60, let next = day.next, let d = distraction {
-            if let a = angrySince, now.timeIntervalSince(a) >= 10 * 60, mayRemind("antic"), every("antic", minutes: 20) {
+            if let a = angrySince, now.timeIntervalSince(a) >= 10 * 60, mayRemind("antic"), every("antic", minutes: pace(20)) {
                 antic = AnticEvent(kind: .parade(next.title), start: now)
                 say(Bubble(text: Lines.parade(next), actions: [focusAction(next), spareAction()], seconds: 25, urgent: true),
                     chime: .grumble, why: L("đã cáu \(Int(now.timeIntervalSince(a) / 60)) phút vì \(d.app), không gõ phím → diễu hành với biển",
@@ -1272,7 +1388,7 @@ final class Brain: ObservableObject {
                 speak(Lines.voiceAngry(next))
                 return
             }
-            if d.minutes >= 3, mayRemind("grumble"), every("grumble", minutes: 30) {
+            if d.minutes >= 3, mayRemind("grumble"), every("grumble", minutes: pace(30)) {
                 antic = AnticEvent(kind: .grumble, start: now)
                 say(Bubble(text: Lines.grumble(next, app: d.app), actions: [focusAction(next), spareAction()], seconds: 15), chime: .grumble,
                     why: L("ở \(d.app) \(Int(d.minutes)) phút", "on \(d.app) for \(Int(d.minutes)) min") + reasonSuffix(),
@@ -1293,7 +1409,7 @@ final class Brain: ObservableObject {
         }
 
         // 7. Overdue tasks.
-        if ctx.inWork, !day.overdue.isEmpty, mayRemind("overdue"), every("overdue", minutes: 90) {
+        if ctx.inWork, !day.overdue.isEmpty, mayRemind("overdue"), every("overdue", minutes: pace(90)) {
             var actions = [BubbleAction(title: L("Kéo vào hôm nay", "Pull into today"), primary: true) { [weak self] in self?.pullOverdueToToday() }]
             if day.overdue.contains(where: { !$0.isRecurring }) {
                 actions.append(BubbleAction(title: L("🌱 Bắt đầu lại", "🌱 Fresh start")) { [weak self] in self?.freshStart() })
@@ -1334,7 +1450,7 @@ final class Brain: ObservableObject {
         }
 
         // 10. Regular nudge with the next task.
-        let minutes = Double(prefs.remindEvery)
+        let minutes = remindMinutes
         if ctx.inWork, let next = day.next, now.timeIntervalSince(lastBubbleAt) > minutes * 60, mayRemind("nudge"), every("nudge", minutes: minutes) {
             let idleHours = now.timeIntervalSince(lastProgress) / 3600
             say(Bubble(text: Lines.nudge(mood: mood, next: next, hoursIdle: idleHours),
@@ -1352,9 +1468,12 @@ final class Brain: ObservableObject {
         }
     }
 
+    /// The regular nudge's interval: at most 20 minutes in strict mode.
+    private var remindMinutes: Double { prefs.strictMode ? min(Double(prefs.remindEvery), 20) : Double(prefs.remindEvery) }
+
     /// Without setting it: has `key` not fired for `minutes` (times its back-off, for a repeating reminder kind)?
     private func isDue(_ key: String, minutes: Double) -> Bool {
-        let backoff = Brain.everyKinds.contains(key) ? Double(life.state.dayBackoff[key] ?? 1) : 1
+        let backoff = Brain.everyKinds.contains(key) && !prefs.strictMode ? Double(life.state.dayBackoff[key] ?? 1) : 1
         return fired[key].map { Date().timeIntervalSince($0) >= minutes * 60 * backoff } ?? true
     }
 

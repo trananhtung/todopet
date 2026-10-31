@@ -80,6 +80,12 @@ final class Prefs: ObservableObject {
     @Published var resumeCard: Bool { didSet { d.set(resumeCard, forKey: "resumeCard") } }
     /// The "where was I?" card may show the page title and address (never from a private window).
     @Published var resumeDetails: Bool { didSet { d.set(resumeDetails, forKey: "resumeDetails") } }
+    /// Let Claude write the reminders, with your Anthropic API key.
+    @Published var coachOn: Bool { didSet { d.set(coachOn, forKey: "coachOn") } }
+    @Published var coachModel: String { didSet { d.set(coachModel, forKey: "coachModel") } }
+    @Published var coachTone: CoachTone { didSet { d.set(coachTone.rawValue, forKey: "coachTone") } }
+    /// Relentless: twice as many reminders, no backing off when you ignore them, no hour-long hold.
+    @Published var strictMode: Bool { didSet { d.set(strictMode, forKey: "strictMode") } }
     /// Show the home corner (knitted decorations) at the bottom-right of the screen.
     @Published var showHome: Bool { didSet { d.set(showHome, forKey: "showHome") } }
 
@@ -103,6 +109,7 @@ final class Prefs: ObservableObject {
             "antics": true, "voiceOn": false,
             "protectFlow": true, "stillWhileTyping": true, "bubbleGap": 15, "keepLog": true, "wishPerDay": 2,
             "nudgeBudget": 8, "defaultEstimate": 30, "resumeCard": true, "resumeDetails": true, "showHome": true,
+            "coachOn": false, "coachModel": ClaudeClient.defaultModel, "coachTone": "harsh", "strictMode": false,
         ])
         lang = Lang(rawValue: d.string(forKey: "lang") ?? "") ?? .systemDefault
         petName = d.string(forKey: "petName") ?? "Mochi"
@@ -141,6 +148,10 @@ final class Prefs: ObservableObject {
         resumeCard = d.bool(forKey: "resumeCard")
         resumeDetails = d.bool(forKey: "resumeDetails")
         showHome = d.bool(forKey: "showHome")
+        coachOn = d.bool(forKey: "coachOn")
+        coachModel = d.string(forKey: "coachModel") ?? ClaudeClient.defaultModel
+        coachTone = CoachTone(rawValue: d.string(forKey: "coachTone") ?? "") ?? .harsh
+        strictMode = d.bool(forKey: "strictMode")
         if let f = d.object(forKey: "firstLaunch") as? Date {
             firstLaunch = f
         } else {
@@ -170,6 +181,11 @@ final class Prefs: ObservableObject {
                 return r
             }
             .filter { !$0.isEmpty }
+    }
+
+    var effectiveCoachModel: String {
+        let m = coachModel.trimmingCharacters(in: .whitespaces)
+        return m.isEmpty ? ClaudeClient.defaultModel : m
     }
 
     var effectiveClaudeModel: String {

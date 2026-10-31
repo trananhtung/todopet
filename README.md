@@ -128,6 +128,17 @@ With an ad-hoc signature macOS asks for Calendar and browser access again after 
 
 Add an Anthropic API key in **Settings → Postponed tasks** ([get one](https://console.anthropic.com/settings/keys)). When you press **Ask Claude** in the split view, the task's title and notes are sent to the Claude API, which returns 3–5 small steps. It uses `claude-opus-5-5` at low effort, with server-side fallback enabled in case a request is declined. Each request costs roughly 1–2 US cents, and you can change the model in Settings. Without a key you can type the steps yourself or start from the quick template.
 
+### Claude coach: reminders written for you, as harsh as you like (optional)
+
+With the same API key, turn on **Settings → Claude coach**, and Claude writes each reminder about what's actually going on: the task you're avoiding, how long nothing has moved, the site you're on, how many reminders you've ignored. Every reminder you ignore makes the next one sharper.
+
+- **Tone:** *Gentle*, *Blunt*, or *Harsh 🔥*, a drill-sergeant coach who goes after the procrastination and the excuses (never insults about you as a person, no profanity).
+- **Model:** Claude Opus 5.5 (default, best, ≈ $0.01 per reminder), Claude Sonnet 5.5 (≈ $0.005) or Claude Haiku 5.5 (fast and cheapest, ≈ $0.0003). Estimates from Anthropic's list prices for a short request at low effort.
+- **Relentless mode:** reminders twice as often (the regular nudge at most every 20 minutes, at least 30 a day), and ignoring them no longer makes them back off or pause.
+- **Try a line** shows what the coach would say right now.
+
+Claude rewrites the counted reminders (next task, planning, overdue, distractions, mischief, postponed tasks, hunger, welcome back); meeting and due-time reminders keep their exact wording, and nothing interrupts a meeting, a focus session or steady typing. If Claude is slow or a request fails, the pet's own line shows instead. At most 80 Claude reminders a day. Each request is one short structured-output call at low effort (with server-side refusal fallback on Opus and Sonnet), and sends task titles, counts and the distracting site's name to `api.anthropic.com`.
+
 ### Using Todoist from Claude or other AI apps (MCP)
 
 TodoPet talks to Todoist directly with your API token. If you also want to manage tasks by chatting with an AI assistant, connect Todoist's official MCP server at `https://ai.todoist.net/mcp`. In Claude Code that's `claude mcp add --transport http todoist https://ai.todoist.net/mcp`, and in Claude Desktop you add it as a custom connector. Tasks you create there show up on the pet within 3 minutes, or right away when you click it.
@@ -234,7 +245,7 @@ The behavior is based on well-known productivity practices, kept deliberately si
 
 ## Privacy
 
-- No analytics and no servers of its own. Network traffic goes to `api.todoist.com`, and to `api.anthropic.com` only when you press **Ask Claude**.
+- No analytics and no servers of its own. Network traffic goes to `api.todoist.com`, and to `api.anthropic.com` only when you press **Ask Claude** or turn on the **Claude coach** (then task titles, counts and the distracting site's name go with each reminder Claude writes).
 - Distraction detection reads the **name of the frontmost app** and, if a browser is in front, the **address and title of its active tab**. They stay in memory and are never stored or sent anywhere. No screen recording or accessibility access is needed.
 - The **"where was I?"** card remembers the task, app, page title and address (http/https only, without anything that looks like a token or session) you were on, plus the next step you pin. It lives **in memory only**: never saved, never written to the diary, forgotten at midnight. Private and incognito windows are never remembered, and **Settings** can leave titles and addresses out.
 - Your **Start when…** plans and tomorrow's frog and note are saved in the app's local preferences until the day they're for is over.
